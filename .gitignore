@@ -1,4 +1,6 @@
-*/nbproject/private
-*/build
-*/dist
+nbproject/private
+build
+dist
+.gradle
 /droidwig/gen/
+*.swp

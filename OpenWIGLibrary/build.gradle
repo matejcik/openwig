@@ -1,0 +1,16 @@
+apply plugin: "java"
+apply plugin: "maven"
+
+group = "com.github.matejcik"
+
+repositories {
+	maven { url "https://jitpack.io" }
+}
+
+dependencies {
+	compile "com.github.matejcik:kahlua2:master-SNAPSHOT"
+}
+
+sourceSets.main.java {
+	srcDirs = ["src"]
+}

@@ -9,6 +9,7 @@ repositories {
 
 dependencies {
 	compile "com.github.matejcik:kahlua2:master-SNAPSHOT"
+	runtime "com.github.matejcik:kahlua2:master-SNAPSHOT"
 }
 
 sourceSets.main.java {

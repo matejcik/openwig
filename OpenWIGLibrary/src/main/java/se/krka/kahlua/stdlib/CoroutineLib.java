@@ -49,7 +49,7 @@ public class CoroutineLib implements JavaFunction {
 		names = new String[NUM_FUNCTIONS];
 		names[CREATE] = "create";
 		names[RESUME] = "resume";
-		names[YIELD] = "yield";
+		names[YIELD] = "yield_";
 		names[STATUS] = "status";
 		names[RUNNING] = "running";
 	}
@@ -85,7 +85,7 @@ public class CoroutineLib implements JavaFunction {
 	public int call(LuaCallFrame callFrame, int nArguments) {
 		switch (index) {
 		case CREATE: return create(callFrame, nArguments);
-		case YIELD: return yield(callFrame, nArguments);
+		case YIELD: return yield_(callFrame, nArguments);
 		case RESUME: return resume(callFrame, nArguments);
 		case STATUS: return status(callFrame, nArguments);
 		case RUNNING: return running(callFrame, nArguments);
@@ -171,11 +171,11 @@ public class CoroutineLib implements JavaFunction {
 		return 0;
 	}
 
-	public static int yield(LuaCallFrame callFrame, int nArguments) {
+	public static int yield_(LuaCallFrame callFrame, int nArguments) {
 		LuaThread t = callFrame.thread;
 		LuaThread parent = t.parent;
 
-		BaseLib.luaAssert(parent != null, "Can not yield outside of a coroutine");
+		BaseLib.luaAssert(parent != null, "Can not yield_ outside of a coroutine");
 		
 		LuaCallFrame realCallFrame = t.callFrameStack[t.callFrameTop - 2];
 		yieldHelper(realCallFrame, callFrame, nArguments);
@@ -183,7 +183,7 @@ public class CoroutineLib implements JavaFunction {
 	}
 	
 	public static void yieldHelper(LuaCallFrame callFrame, LuaCallFrame argsCallFrame, int nArguments) {
-		BaseLib.luaAssert(callFrame.insideCoroutine, "Can not yield outside of a coroutine");
+		BaseLib.luaAssert(callFrame.insideCoroutine, "Can not yield_ outside of a coroutine");
 		
 		LuaThread t = callFrame.thread;
 		LuaThread parent = t.parent;

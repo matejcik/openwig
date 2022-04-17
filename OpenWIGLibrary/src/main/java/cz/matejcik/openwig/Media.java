@@ -38,7 +38,7 @@ public class Media extends EventTable {
 			LuaTable lt = (LuaTable)value;
 			int n = lt.len();
 			for (int i = 1; i <= n; i++) {
-				LuaTable res = (LuaTable)lt.rawget(new Double(i));
+				LuaTable res = (LuaTable)lt.rawget(i);
 				String t = (String)res.rawget("Type");
 				if ("fdl".equals(t)) continue;
 				type = t.toLowerCase();

@@ -60,7 +60,7 @@ public class Timer extends EventTable {
 	private static final int INTERVAL = 1;
 	private int type = COUNTDOWN;
 	
-	private static final Double ZERO = new Double(0);
+	private static final double ZERO = 0;
 	
 	private long duration = -1;
 	private long lastTick = 0;

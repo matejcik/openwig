@@ -146,6 +146,14 @@ public class EventTable implements LuaTable, Serializable {
 			return table.rawget(key);
 	}
 
+	public void rawset(int key, Object value) {
+		table.rawset(key, value);
+	}
+
+	public Object rawget(int key) {
+		return table.rawget(key);
+	}
+
 	public Object next (Object key) { return table.next(key); }
 
 	public int len () { return table.len(); }

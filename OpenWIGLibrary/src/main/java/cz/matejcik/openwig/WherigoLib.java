@@ -2,8 +2,11 @@
 package cz.matejcik.openwig;
 
 import cz.matejcik.openwig.platform.UI;
-import java.util.Enumeration;
-import java.util.Hashtable;
+
+import java.lang.reflect.InvocationTargetException;
+import java.util.HashMap;
+import java.util.Map;
+
 import se.krka.kahlua.stdlib.BaseLib;
 import se.krka.kahlua.vm.*;
 
@@ -65,7 +68,7 @@ public class WherigoLib implements JavaFunction {
 		names[GETVALUE] = "GetValue";
 	}
 	
-	public static final Hashtable env = new Hashtable(); /* Wherigo's Env table */
+	public static final Map<String, Object> env = new HashMap<>(); /* Wherigo's Env table */
 	public static final String DEVICE_ID = "DeviceID";
 	public static final String PLATFORM = "Platform";
 	static {
@@ -78,11 +81,11 @@ public class WherigoLib implements JavaFunction {
 		env.put("CartFilename", "cartridge.gwc");
 		env.put("PathSep", "/"); // no. you may NOT do file i/o on this device.
 		env.put("Version", "2.11-compatible(r"+Engine.VERSION+")");
-		env.put("Downloaded", new Double(0));
+		env.put("Downloaded", LuaState.toDouble(0));
 	}
 	
 	private int index;
-	private Class klass;
+	private Class<?> klass;
 
 	private static WherigoLib[] functions;
 	static {
@@ -92,7 +95,7 @@ public class WherigoLib implements JavaFunction {
 		}
 	}
 	
-	private Class assignClass () {
+	private Class<?> assignClass () {
 		// because i'm too lazy to type out the break;s in a switch
 		switch (index) {
 			case DISTANCE:
@@ -151,22 +154,20 @@ public class WherigoLib implements JavaFunction {
 		wig.rawset("INVALID_ZONEPOINT", null);
 		
 		// screen constants
-		wig.rawset("MAINSCREEN", new Double(UI.MAINSCREEN));
-		wig.rawset("DETAILSCREEN", new Double(UI.DETAILSCREEN));
-		wig.rawset("ITEMSCREEN", new Double(UI.ITEMSCREEN));
-		wig.rawset("INVENTORYSCREEN", new Double(UI.INVENTORYSCREEN));
-		wig.rawset("LOCATIONSCREEN", new Double(UI.LOCATIONSCREEN));
-		wig.rawset("TASKSCREEN", new Double(UI.TASKSCREEN));
+		wig.rawset("MAINSCREEN", LuaState.toDouble(UI.MAINSCREEN));
+		wig.rawset("DETAILSCREEN", LuaState.toDouble(UI.DETAILSCREEN));
+		wig.rawset("ITEMSCREEN", LuaState.toDouble(UI.ITEMSCREEN));
+		wig.rawset("INVENTORYSCREEN", LuaState.toDouble(UI.INVENTORYSCREEN));
+		wig.rawset("LOCATIONSCREEN", LuaState.toDouble(UI.LOCATIONSCREEN));
+		wig.rawset("TASKSCREEN", LuaState.toDouble(UI.TASKSCREEN));
 		
 		LuaTable pack = (LuaTable)environment.rawget("package");
 		LuaTable loaded = (LuaTable)pack.rawget("loaded");
 		loaded.rawset("Wherigo", wig);
 		
 		LuaTable envtable = new LuaTableImpl(); /* Wherigo's Env table */
-		Enumeration e = env.keys();
-		while (e.hasMoreElements()) {
-			String key = (String)e.nextElement();
-			envtable.rawset(key, env.get(key));
+		for (var entry : env.entrySet()) {
+			envtable.rawset(entry.getKey(), entry.getValue());
 		}
 		envtable.rawset("Device", Engine.instance.gwcfile.device);
 		environment.rawset("Env", envtable);
@@ -203,12 +204,12 @@ public class WherigoLib implements JavaFunction {
 			case ZTIMER:
 			case ZTASK:
 				try {
-					return construct((EventTable)klass.newInstance(), callFrame, nArguments);
-				} catch (InstantiationException e) {
+					return construct((EventTable)klass.getDeclaredConstructor().newInstance(), callFrame, nArguments);
+				} catch (NoSuchMethodException
+						| InstantiationException 
+						| IllegalAccessException 
+						| InvocationTargetException e) {
 					/* will not happen */
-					return 0;
-				} catch (IllegalAccessException e) {
-					/* will not happen either */
 					return 0;
 				}
 				
@@ -313,7 +314,7 @@ public class WherigoLib implements JavaFunction {
 		String[] texts = new String[n];
 		Media[] media = new Media[n];
 		for (int i = 1; i <= n; i++) {
-			LuaTable item = (LuaTable)lt.rawget(new Double(i));
+			LuaTable item = (LuaTable)lt.rawget(i);
 			texts[i-1] = Engine.removeHtml((String)item.rawget("Text"));
 			media[i-1] = (Media)item.rawget("Media");
 		}

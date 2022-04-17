@@ -1,8 +1,9 @@
 package cz.matejcik.openwig;
 
 import java.io.*;
+import java.util.HashMap;
+import java.util.Map;
 
-import java.util.Hashtable;
 import se.krka.kahlua.vm.*;
 import se.krka.kahlua.stdlib.MathLib;
 
@@ -72,14 +73,14 @@ public class ZonePoint implements LuaTable, Serializable {
 		return distance(z.latitude, z.longitude, latitude, longitude);
 	}
 	
-	public static final Hashtable conversions = new Hashtable(6);
+	public static final Map<String, Double> conversions = new HashMap<>(6);
 	static {
-		conversions.put("feet", new Double(0.3048));
-		conversions.put("ft", new Double(0.3048));
-		conversions.put("miles", new Double(1609.344));
-		conversions.put("meters", new Double(1));
-		conversions.put("kilometers", new Double(1000));
-		conversions.put("nauticalmiles", new Double(1852));
+		conversions.put("feet", 0.3048);
+		conversions.put("ft", 0.3048);
+		conversions.put("miles", 1609.344);
+		conversions.put("meters", 1.0);
+		conversions.put("kilometers", 1000.0);
+		conversions.put("nauticalmiles", 1852.0);
 	}
 	
 	public static double convertDistanceTo (double value, String unit) {
@@ -190,6 +191,13 @@ public class ZonePoint implements LuaTable, Serializable {
 		if ("longitude".equals(name)) return LuaState.toDouble(longitude);
 		if ("altitude".equals(name)) return LuaState.toDouble(altitude);
 		return null;
+	}
+
+	public Object rawget(int i) {
+		return null;
+	}
+
+	public void rawset(int i, Object value) {
 	}
 
 	public Object next (Object key) { return null; }

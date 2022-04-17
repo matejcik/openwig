@@ -1,13 +1,19 @@
-apply plugin: 'java'
-sourceCompatibility = 1.7
-targetCompatibility = 1.7
-sourceSets {
-    main {
-        java {
-            srcDir 'src'
-        }
-        resources {
-            srcDir 'src'
-        }
-    }
+plugins {
+    id 'java'
+}
+
+group 'cz.matejcik.openwig'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+}
+
+test {
+    useJUnitPlatform()
 }

@@ -28,6 +28,9 @@ public interface LuaTable {
 	
 	void rawset(Object key, Object value);
 	Object rawget(Object key);
+
+	void rawset(int key, Object value);
+	Object rawget(int key);
 	
 	Object next(Object key);
 	int len();

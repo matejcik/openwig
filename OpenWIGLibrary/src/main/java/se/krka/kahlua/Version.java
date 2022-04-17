@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2008 Kristofer Karlsson <kristofer.karlsson@gmail.com>
+Copyright (c) 2007-2008 Kristofer Karlsson <kristofer.karlsson@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,24 +19,17 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package se.krka.kahlua.vm;
+package se.krka.kahlua;
 
-public class LuaException extends RuntimeException {
-	/**
-	 *
-	 */
-	private static final long serialVersionUID = 1L;
 
-	public Object errorMessage;
-
-	public LuaException(Object errorMessage) {
-		this.errorMessage = errorMessage;
-	}
-
-	public String getMessage() {
-		if (errorMessage == null) {
-			return "nil";
-		}
-		return errorMessage.toString();
-	}
+/**
+ * @exclude
+ */
+public class Version {
+	public static final String LUA_VERSION = "lua.version";
+	public static final String KAHLUA_MAJOR = "kahlua.major";
+	public static final String KAHLUA_MINOR = "kahlua.minor";
+	public static final String KAHLUA_FIX = "kahlua.fix";
+	public static final String VERSION = "Kahlua " + KAHLUA_MAJOR + "." + KAHLUA_MINOR + "." + KAHLUA_FIX + " for Lua " + LUA_VERSION;
 }
+

@@ -22,10 +22,13 @@ THE SOFTWARE.
 package se.krka.kahlua.vm;
 
 public class LuaCallFrame {
-	public LuaThread thread;
-	
-	public LuaCallFrame(LuaThread thread) {
-		this.thread = thread;
+    private final Platform platform;
+
+	public final Coroutine coroutine;
+
+    public LuaCallFrame(Coroutine coroutine) {
+		this.coroutine = coroutine;
+        platform = coroutine.getPlatform();
 	}
 	
 	public LuaClosure closure;
@@ -38,26 +41,26 @@ public class LuaCallFrame {
 	public int nArguments;
 
 	boolean fromLua;
-	public boolean insideCoroutine;
+	public boolean canYield;
 	
 	boolean restoreTop;
 	
 	public final void set(int index, Object o) {
 		/*
 		if (index > getTop()) {
-			throw new LuaException("Tried to access index outside of stack, top: " + getTop() + ", index: " + index);
+			throw new KahluaException("Tried to access index outside of stack, top: " + getTop() + ", index: " + index);
 		}
 		*/
-		thread.objectStack[localBase + index] = o;
+		coroutine.objectStack[localBase + index] = o;
 	}
 
 	public final Object get(int index) {
 		/*
 		if (index > getTop()) {
-			throw new LuaException("Tried to access index outside of stack, top: " + getTop() + ", index: " + index);
+			throw new KahluaException("Tried to access index outside of stack, top: " + getTop() + ", index: " + index);
 		}
 		*/
-		return thread.objectStack[localBase + index];
+		return coroutine.objectStack[localBase + index];
 	}
 
 	public int push(Object x) {
@@ -80,12 +83,12 @@ public class LuaCallFrame {
 	}
 	
 	public final void stackCopy(int startIndex, int destIndex, int len) {
-		thread.stackCopy(localBase + startIndex, localBase + destIndex, len);
+		coroutine.stackCopy(localBase + startIndex, localBase + destIndex, len);
 	}
 	
 	public void stackClear(int startIndex, int endIndex) {
 		for (; startIndex <= endIndex; startIndex++) {
-			thread.objectStack[localBase + startIndex] = null;
+			coroutine.objectStack[localBase + startIndex] = null;
 		}
 	}
 
@@ -101,19 +104,19 @@ public class LuaCallFrame {
 	}
 	
 	public final void setTop(int index) {
-		thread.setTop(localBase + index);
+		coroutine.setTop(localBase + index);
 	}
 
 	public void closeUpvalues(int a) {
-		thread.closeUpvalues(localBase + a);
+		coroutine.closeUpvalues(localBase + a);
 	}
 
 	public UpValue findUpvalue(int b) {
-		return thread.findUpvalue(localBase + b);
+		return coroutine.findUpvalue(localBase + b);
 	}
 
 	public int getTop() {
-		return thread.getTop() - localBase;
+		return coroutine.getTop() - localBase;
 	}
 
 	public void init() {
@@ -156,11 +159,11 @@ public class LuaCallFrame {
 		}
 	}
 
-	public LuaTable getEnvironment() {
+	public KahluaTable getEnvironment() {
 		if (isLua()) {
 			return closure.env;
 		}
-		return thread.environment;
+		return coroutine.environment;
 	}
 
 	public boolean isJava() {
@@ -179,5 +182,23 @@ public class LuaCallFrame {
 			return "Callframe at: " + javaFunction.toString();
 		}
 		return super.toString();
+	}
+
+    public Platform getPlatform() {
+        return platform;
+    }
+
+	void setup(LuaClosure closure, JavaFunction javaFunction, int localBase, int returnBase, int nArguments, boolean fromLua, boolean insideCoroutine) {
+		this.localBase = localBase;
+		this.returnBase = returnBase;
+		this.nArguments = nArguments;
+		this.fromLua = fromLua;
+		this.canYield = insideCoroutine;
+		this.closure = closure;
+		this.javaFunction = javaFunction;
+	}
+
+	public KahluaThread getThread() {
+		return coroutine.getThread();
 	}
 }

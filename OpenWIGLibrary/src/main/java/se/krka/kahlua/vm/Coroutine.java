@@ -22,42 +22,47 @@ THE SOFTWARE.
 package se.krka.kahlua.vm;
 
 import java.util.Vector;
-import se.krka.kahlua.stdlib.BaseLib;
 
-public class LuaThread {
-	public LuaTable environment;
+public class Coroutine {
+	private final Platform platform;
 
-	public LuaThread parent;
-	
+	private KahluaThread thread;
+	private Coroutine parent;
+
+	public KahluaTable environment;
+
 	public String stackTrace = "";
 
-	public Vector liveUpvalues;
+	private final Vector liveUpvalues = new Vector();
 
-	public static final int MAX_STACK_SIZE = 1000;
-	public static final int INITIAL_STACK_SIZE = 10;
+	private static final int MAX_STACK_SIZE = 1000;
+	private static final int INITIAL_STACK_SIZE = 10;
 
 	private static final int MAX_CALL_FRAME_STACK_SIZE = 100;
 	private static final int INITIAL_CALL_FRAME_STACK_SIZE = 10;
 	
 	public Object[] objectStack;
-	public int top;
+	private int top;
 
-	public LuaCallFrame[] callFrameStack;
-	public int callFrameTop;
-	
-	public LuaState state;
+	private LuaCallFrame[] callFrameStack;
+	private int callFrameTop;
 
-	public int expectedResults;
-	
-	public LuaThread(LuaState state, LuaTable environment) {
-		this.state = state;
+	public Coroutine() {
+        platform = null;
+    }
+
+	public Coroutine(Platform platform, KahluaTable environment, KahluaThread thread) {
+		this.platform = platform;
 		this.environment = environment;
-		
+		this.thread = thread;
 		objectStack = new Object[INITIAL_STACK_SIZE];
 		callFrameStack = new LuaCallFrame[INITIAL_CALL_FRAME_STACK_SIZE];
-		liveUpvalues = new Vector();		
 	}
-	
+
+    public Coroutine(Platform platform, KahluaTable environment) {
+		this(platform, environment, null);
+	}
+
 	public final LuaCallFrame pushNewCallFrame(LuaClosure closure,
 											   JavaFunction javaFunction,
 											   int localBase,
@@ -67,14 +72,7 @@ public class LuaThread {
 											   boolean insideCoroutine) {
 		setCallFrameStackTop(callFrameTop + 1);
 		LuaCallFrame callFrame = currentCallFrame();
-		
-		callFrame.localBase = localBase;
-		callFrame.returnBase = returnBase;
-		callFrame.nArguments = nArguments;
-		callFrame.fromLua = fromLua;
-		callFrame.insideCoroutine = insideCoroutine;
-		callFrame.closure = closure;
-		callFrame.javaFunction = javaFunction;
+		callFrame.setup(closure, javaFunction, localBase, returnBase, nArguments, fromLua, insideCoroutine);
 		return callFrame;
 	}
 
@@ -167,11 +165,10 @@ public class LuaThread {
 		int loopIndex = liveUpvalues.size();
 		while (--loopIndex >= 0) {
 			UpValue uv = (UpValue) liveUpvalues.elementAt(loopIndex);
-			if (uv.index < closeIndex) {
+			if (uv.getIndex() < closeIndex) {
 				return;
 			}
-			uv.value = objectStack[uv.index];
-			uv.thread = null;
+            uv.close();
 			liveUpvalues.removeElementAt(loopIndex);
 		}
 	}
@@ -181,16 +178,15 @@ public class LuaThread {
 		int loopIndex = liveUpvalues.size();
 		while (--loopIndex >= 0) {
 			UpValue uv = (UpValue) liveUpvalues.elementAt(loopIndex);
-			if (uv.index == scanIndex) {
+            int index = uv.getIndex();
+			if (index == scanIndex) {
 				return uv;
 			}
-			if (uv.index < scanIndex) {
+			if (index < scanIndex) {
 				break;
 			}
 		}
-		UpValue uv = new UpValue();
-		uv.thread = this;
-		uv.index = scanIndex;
+		UpValue uv = new UpValue(this, scanIndex);
 		
 		liveUpvalues.insertElementAt(uv, loopIndex + 1);
 		return uv;				
@@ -213,9 +209,9 @@ public class LuaThread {
 	}
 
 	public LuaCallFrame getParent(int level) {
-		BaseLib.luaAssert(level >= 0, "Level must be non-negative");
+		KahluaUtil.luaAssert(level >= 0, "Level must be non-negative");
 		int index = callFrameTop - level - 1;
-		BaseLib.luaAssert(index >= 0, "Level too high");
+		KahluaUtil.luaAssert(index >= 0, "Level too high");
 		return callFrameStack[index];
 	}
 	
@@ -262,7 +258,7 @@ public class LuaThread {
 				}
 			}
 		} else {
-			return "at " + frame.javaFunction;
+			return "at " + frame.javaFunction + "\n";
 		}
 		return "";
 	}
@@ -300,7 +296,7 @@ public class LuaThread {
 						s2 = s2 + lines[0] + " (not started)";
 					}
 				}
-				s = s + String.format("%s %4d: %s %s %s\n", indent(level), i, (callFrame.fromLua ? " [from lua]" : "[from java]"), (callFrame.insideCoroutine ? "[can yield]" : "         []"), s2);
+				s = s + String.format("%s %4d: %s %s %s\n", indent(level), i, (callFrame.fromLua ? " [from lua]" : "[from java]"), (callFrame.canYield ? "[can yield]" : "         []"), s2);
 			}
 			s = s + indent(level) + "Stack:\n";
 			int stackIndex = 0;
@@ -338,5 +334,94 @@ public class LuaThread {
 		return s;
 	}
 	*/
-	
+
+    public Platform getPlatform() {
+        return platform;
+    }
+
+	public String getStatus() {
+		if (parent == null) {
+			if (isDead()) {
+				return "dead";
+			} else {
+				return "suspended";
+			}
+		} else {
+			return "normal";
+		}
+	}
+
+	public boolean atBottom() {
+		return callFrameTop == 1;
+	}
+
+	public int getCallframeTop() {
+		return callFrameTop;
+	}
+
+	public LuaCallFrame[] getCallframeStack() {
+		return callFrameStack;
+	}
+
+
+	public LuaCallFrame getCallFrame(int index) {
+		if (index < 0) {
+			index += callFrameTop;
+		}
+		return callFrameStack[index];
+	}
+
+	/**
+	 * @exclude
+	 */
+    public static void yieldHelper(LuaCallFrame callFrame, LuaCallFrame argsCallFrame, int nArguments) {
+        KahluaUtil.luaAssert(callFrame.canYield, "Can not yield outside of a coroutine");
+
+		Coroutine coroutine = callFrame.coroutine;
+
+		KahluaThread thread = coroutine.getThread();
+        Coroutine parent = coroutine.parent;
+
+		KahluaUtil.luaAssert(parent != null, "Internal error, coroutine must be running");
+		KahluaUtil.luaAssert(coroutine == thread.currentCoroutine, "Internal error, must yield current thread");
+        coroutine.destroy();
+
+        LuaCallFrame nextCallFrame = parent.currentCallFrame();
+
+		if (nextCallFrame == null) {
+			parent.setTop(nArguments + 1);
+			parent.objectStack[0] = Boolean.TRUE;
+			for (int i = 0; i < nArguments; i++) {
+				parent.objectStack[i + 1] = argsCallFrame.get(i);
+			}
+		} else {
+			nextCallFrame.push(Boolean.TRUE);
+			// Copy arguments
+			for (int i = 0; i < nArguments; i++) {
+				Object value = argsCallFrame.get(i);
+				nextCallFrame.push(value);
+			}
+		}
+
+
+        thread.currentCoroutine = parent;
+    }
+
+	public void resume(Coroutine parent) {
+		this.parent = parent;
+		this.thread = parent.thread;
+	}
+
+	public KahluaThread getThread() {
+		return thread;
+	}
+
+	public Coroutine getParent() {
+		return parent;
+	}
+
+	public void destroy() {
+		this.parent = null;
+		this.thread = null;
+	}
 }

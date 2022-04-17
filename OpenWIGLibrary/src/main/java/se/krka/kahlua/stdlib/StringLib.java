@@ -21,11 +21,7 @@ THE SOFTWARE.
  */
 package se.krka.kahlua.stdlib;
 
-import se.krka.kahlua.vm.JavaFunction;
-import se.krka.kahlua.vm.LuaCallFrame;
-import se.krka.kahlua.vm.LuaState;
-import se.krka.kahlua.vm.LuaTable;
-import se.krka.kahlua.vm.LuaTableImpl;
+import se.krka.kahlua.vm.*;
 
 public final class StringLib implements JavaFunction {
 
@@ -56,10 +52,10 @@ public final class StringLib implements JavaFunction {
 	private static final int CAP_POSITION = ( -2 );
 
 	private static final String[] names;
-	private static StringLib[] functions;  
+	private static final StringLib[] functions;
 
 	// NOTE: String.class won't work in J2ME - so this is used as a workaround
-	public static final Class STRING_CLASS = "".getClass();
+	private static final Class STRING_CLASS = "".getClass();
 	
 	static {
 		names = new String[NUM_FUNCTIONS];
@@ -80,20 +76,22 @@ public final class StringLib implements JavaFunction {
 		}
 	}
 
-	private int methodId;       
+	/** @exclude */
+	private final int methodId;
 	public StringLib(int index) {
 		this.methodId = index;
 	}
 
-	public static void register(LuaState state) {
-		LuaTable string = new LuaTableImpl();
-		state.getEnvironment().rawset("string", string);
+	public static void register(Platform platform, KahluaTable env) {
+		KahluaTable string = platform.newTable();
 		for (int i = 0; i < NUM_FUNCTIONS; i++) {
 			string.rawset(names[i], functions[i]);
 		}
 
 		string.rawset("__index", string);
-		state.setClassMetatable(STRING_CLASS, string);
+        KahluaTable metatables = KahluaUtil.getClassMetatables(platform, env);
+        metatables.rawset(STRING_CLASS, string);
+		env.rawset("string", string);
 	}
 
 	public String toString() {
@@ -124,7 +122,7 @@ public final class StringLib implements JavaFunction {
 	}
 	
 	private int format(LuaCallFrame callFrame, int nArguments) {
-		String f = (String) BaseLib.getArg(callFrame, 1, BaseLib.TYPE_STRING, names[FORMAT]);
+		String f = KahluaUtil.getStringArg(callFrame, 1, names[FORMAT]);
 
 		int len = f.length();
 		int argc = 2;
@@ -133,7 +131,7 @@ public final class StringLib implements JavaFunction {
 			char c = f.charAt(i);
 			if (c == '%') {
 				i++;
-				BaseLib.luaAssert(i < len, "incomplete option to 'format'");
+				KahluaUtil.luaAssert(i < len, "incomplete option to 'format'");
 				c = f.charAt(i);
 				if (c == '%') {
 					result.append('%');
@@ -165,16 +163,16 @@ public final class StringLib implements JavaFunction {
 							break flagLoop;
 						}
 						i++;
-						BaseLib.luaAssert(i < len, "incomplete option to 'format'");
+						KahluaUtil.luaAssert(i < len, "incomplete option to 'format'");
 						c = f.charAt(i);
 					}
 
 					// Detect width
 					int width = 0;
 					while (c >= '0' && c <= '9') {
-						width = 10 * width + (int) (c - '0');
+						width = 10 * width + c - '0';
 						i++;
-						BaseLib.luaAssert(i < len, "incomplete option to 'format'");
+						KahluaUtil.luaAssert(i < len, "incomplete option to 'format'");
 						c = f.charAt(i);
 					}
 					
@@ -184,13 +182,13 @@ public final class StringLib implements JavaFunction {
 					if (c == '.') {
 						hasPrecision = true;
 						i++;
-						BaseLib.luaAssert(i < len, "incomplete option to 'format'");
+						KahluaUtil.luaAssert(i < len, "incomplete option to 'format'");
 						c = f.charAt(i);
 
 						while (c >= '0' && c <= '9') {
-							precision = 10 * precision + (int) (c - '0');
+							precision = 10 * precision + c - '0';
 							i++;
-							BaseLib.luaAssert(i < len, "incomplete option to 'format'");
+							KahluaUtil.luaAssert(i < len, "incomplete option to 'format'");
 							c = f.charAt(i);
 						}
 					}
@@ -337,7 +335,7 @@ public final class StringLib implements JavaFunction {
 						boolean isNaN = v.isInfinite() || v.isNaN();
 						
 						double vDouble = v.doubleValue();
-						if (MathLib.isNegative(vDouble)) {
+						if (KahluaUtil.isNegative(vDouble)) {
 							if (!isNaN) {
 								result.append('-');
 							}
@@ -348,7 +346,7 @@ public final class StringLib implements JavaFunction {
 							result.append(' ');
 						}
 						if (isNaN) {
-							result.append(BaseLib.numberToString(v));
+							result.append(KahluaUtil.numberToString(v));
 						} else {
 							if (c == 'f') {
 								appendPrecisionNumber(result, vDouble, precision, repr);
@@ -371,7 +369,7 @@ public final class StringLib implements JavaFunction {
 						Double v = getDoubleArg(callFrame, argc);
 						boolean isNaN = v.isInfinite() || v.isNaN();
 						double vDouble = v.doubleValue();
-						if (MathLib.isNegative(vDouble)) {
+						if (KahluaUtil.isNegative(vDouble)) {
 							if (!isNaN) {
 								result.append('-');
 							}
@@ -382,9 +380,9 @@ public final class StringLib implements JavaFunction {
 							result.append(' ');
 						}
 						if (isNaN) {
-							result.append(BaseLib.numberToString(v));
+							result.append(KahluaUtil.numberToString(v));
 						} else {
-							double x = MathLib.roundToSignificantNumbers(vDouble, precision);
+							double x = roundToSignificantNumbers(vDouble, precision);
 
 							/*
 							 * Choose %f version if:
@@ -394,7 +392,7 @@ public final class StringLib implements JavaFunction {
 							 *     
 							 * otherwise, choose %e
 							 */ 
-							if (x == 0 || (x >= 1e-4 && x < MathLib.ipow(10, precision))) {
+							if (x == 0 || (x >= 1e-4 && x < (double) KahluaUtil.ipow(10, precision))) {
 								int iPartSize;
 								if (x == 0) {
 									iPartSize = 1;
@@ -511,8 +509,8 @@ public final class StringLib implements JavaFunction {
 	 * @param sb the stringbuffer to append to
 	 * @param value the value to append
 	 * @param base the base to use when formatting (typically 8, 10 or 16)
-	 * @param minDigits 
-	 * @param zeroIsEmpty if the value is 0, should the zero be printed or not?
+	 * @param printZero
+	 * @param minDigits
 	 */
 	private static void stringBufferAppend(StringBuffer sb, double value, int base, boolean printZero, int minDigits) {
 		int startPos = sb.length();
@@ -549,14 +547,14 @@ public final class StringLib implements JavaFunction {
 	 * @param requirePeriod
 	 */
 	private void appendPrecisionNumber(StringBuffer buffer, double number, int precision, boolean requirePeriod) {
-		number = MathLib.roundToPrecision(number, precision);
+		number = roundToPrecision(number, precision);
 		double iPart = Math.floor(number);
 		double fPart = number - iPart;
 		
 		for (int i = 0; i < precision; i++) {
 			fPart *= 10.0;
 		}
-		fPart = MathLib.round(iPart + fPart) - iPart;
+		fPart = KahluaUtil.round(iPart + fPart) - iPart;
 			
 		stringBufferAppend(buffer, iPart, 10, true, 0);
 		
@@ -579,7 +577,7 @@ public final class StringLib implements JavaFunction {
 		
 		stringBufferAppend(buffer, iPart, 10, true, 0);
 		
-		double fPart = MathLib.roundToSignificantNumbers(number - iPart, significantDecimals);
+		double fPart = roundToSignificantNumbers(number - iPart, significantDecimals);
 		
 		boolean hasNotStarted = iPart == 0 && fPart != 0;
 		int zeroPaddingBefore = 0;
@@ -593,7 +591,7 @@ public final class StringLib implements JavaFunction {
 				}
 			}
 		}
-		fPart = MathLib.round(fPart);
+		fPart = KahluaUtil.round(fPart);
 
 		if (!includeTrailingZeros) {
 			while (fPart > 0 && (fPart % 10) == 0) {
@@ -636,7 +634,7 @@ public final class StringLib implements JavaFunction {
 					exponent--;
 				}
 			}
-			x = MathLib.roundToPrecision(x, precision);
+			x = roundToPrecision(x, precision);
 		}
 		int absExponent = Math.abs(exponent);
 		char expSign;
@@ -660,19 +658,19 @@ public final class StringLib implements JavaFunction {
 	}
 	
 	private String getStringArg(LuaCallFrame callFrame, int argc, String funcname) {
-		return (String) BaseLib.getArg(callFrame, argc, BaseLib.TYPE_STRING, funcname);
+		return KahluaUtil.getStringArg(callFrame, argc, funcname);
 	}
 	
 	private Double getDoubleArg(LuaCallFrame callFrame, int argc) {
 		return getDoubleArg(callFrame, argc, names[FORMAT]);
 	}
 
-	private Double getDoubleArg(LuaCallFrame callFrame, int argc, String funcname) {
-		return (Double)BaseLib.getArg(callFrame, argc, BaseLib.TYPE_NUMBER, funcname);
+	private Double getDoubleArg(LuaCallFrame callFrame, int argc, String name) {
+		return KahluaUtil.getNumberArg(callFrame, argc, name);
 	}
 
 	private int lower(LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 1, "not enough arguments");
+		KahluaUtil.luaAssert(nArguments >= 1, "not enough arguments");
 		String s = getStringArg(callFrame,1,names[LOWER]);
 		
 		callFrame.push(s.toLowerCase());
@@ -680,7 +678,7 @@ public final class StringLib implements JavaFunction {
 	}
 
 	private int upper(LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 1, "not enough arguments");
+		KahluaUtil.luaAssert(nArguments >= 1, "not enough arguments");
 		String s = getStringArg(callFrame,1,names[UPPER]);
 
 		callFrame.push(s.toUpperCase());
@@ -688,7 +686,7 @@ public final class StringLib implements JavaFunction {
 	}
 
 	private int reverse(LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 1, "not enough arguments");
+		KahluaUtil.luaAssert(nArguments >= 1, "not enough arguments");
 		String s = getStringArg(callFrame, 1, names[REVERSE]);
 		s = new StringBuffer(s).reverse().toString();
 		callFrame.push(s);
@@ -696,52 +694,43 @@ public final class StringLib implements JavaFunction {
 	}
 
 	private int stringByte(LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 1, "not enough arguments");
+		KahluaUtil.luaAssert(nArguments >= 1, "not enough arguments");
 		String s = getStringArg(callFrame, 1, names[BYTE]);
 
-		Double di = null;
-		Double dj = null;
-		if (nArguments >= 2) {
-			di = getDoubleArg(callFrame, 2, names[BYTE]);
-			if (nArguments >= 3) {
-				dj = getDoubleArg(callFrame, 3, names[BYTE]);
-			}
-		}
-		double di2 = 1;
-		if (di != null) {
-			di2 = LuaState.fromDouble(di);
-		}
-		double dj2 = di2;
-		if (dj != null) {
-			dj2 = LuaState.fromDouble(dj);
-		}
-
-		int ii = (int) di2, ij = (int) dj2;
+		int i = nullDefault(1, KahluaUtil.getOptionalNumberArg(callFrame, 2));
+		int j = nullDefault(i, KahluaUtil.getOptionalNumberArg(callFrame, 3));
 
 		int len = s.length();
-		if (ii < 0) {
-			ii += len + 1;
+		if (i < 0) {
+			i += len + 1;
 		}
-		if (ii <= 0) {
-			ii = 1;
+		if (i <= 0) {
+			i = 1;
 		}
-		if (ij < 0) {
-			ij += len + 1;
-		} else if (ij > len) {
-			ij = len;
+		if (j < 0) {
+			j += len + 1;
+		} else if (j > len) {
+			j = len;
 		}
-		int nReturns = 1 +ij - ii;
+		int nReturns = 1 +j - i;
 
 		if (nReturns <= 0) {
 			return 0;
 		}
 		callFrame.setTop(nReturns);
-		int offset = ii - 1;
-		for (int i = 0; i < nReturns; i++) {
-			char c = s.charAt(offset + i);
-			callFrame.set(i, new Double((double) c));                   
+		int offset = i - 1;
+		for (int i2 = 0; i2 < nReturns; i2++) {
+			char c = s.charAt(offset + i2);
+			callFrame.set(i2, KahluaUtil.toDouble(c));
 		}
 		return nReturns;
+	}
+
+	private int nullDefault(int defaultValue, Double val) {
+		if (val == null) {
+			return defaultValue;
+		}
+		return val.intValue();
 	}
 
 	private int stringChar(LuaCallFrame callFrame, int nArguments) {
@@ -786,52 +775,81 @@ public final class StringLib implements JavaFunction {
 		return callFrame.push(res);
 	}
 
-	/* Pattern Matching
-	 * Original code that this was adapted from is copyright (c) 2008 groundspeak, inc.
-	 */
+    /**
+     * Rounds to keep <em>precision</em> decimals. Rounds towards even numbers.
+     * @param x the number to round
+     * @param precision the precision to round to. A precision of 3 will for instance round 1.65432 to 1.654
+     * @return the rounded number
+     */
+    public static double roundToPrecision(double x, int precision) {
+        double roundingOffset = KahluaUtil.ipow(10, precision);
+        return KahluaUtil.round(x * roundingOffset) / roundingOffset;
+    }
 
+    public static double roundToSignificantNumbers(double x, int precision) {
+        if (x == 0) {
+            return 0;
+        }
+        if (x < 0) {
+            return -roundToSignificantNumbers(-x, precision);
+        }
+        double lowerLimit = KahluaUtil.ipow(10, precision - 1);
+        double upperLimit = lowerLimit * 10.0;
+        double multiplier = 1.0;
+        while (multiplier * x < lowerLimit) {
+            multiplier *= 10.0;
+        }
+        while (multiplier * x >= upperLimit) {
+            multiplier /= 10.0;
+        }
+        return KahluaUtil.round(x * multiplier) / multiplier;
+    }
+
+    /* Pattern Matching
+      * Original code that this was adapted from is copyright (c) 2008 groundspeak, inc.
+      */
+
+	/** @exclude */
 	public static class MatchState {
+		public final LuaCallFrame callFrame;
+		public final StringPointer src_init;  /* init of source string */
+		public final int endIndex; /* end (`\0') of source string */
+		public final Capture[] capture;
 
-		public MatchState () {
-			capture = new Capture[ LUA_MAXCAPTURES ];
-			for ( int i = 0; i < LUA_MAXCAPTURES; i ++ ) {
-				capture[i] = new Capture ();
+		public MatchState(LuaCallFrame callFrame, StringPointer srcInit, int endIndex) {
+			this.callFrame = callFrame;
+			this.src_init = srcInit;
+			this.endIndex = endIndex;
+			capture = new Capture[LUA_MAXCAPTURES];
+			for (int i = 0; i < LUA_MAXCAPTURES; i++) {
+				capture[i] = new Capture();
 			}
 		}
-		public StringPointer src_init;  /* init of source string */
 
-		public int endIndex; /* end (`\0') of source string */
 
-		public LuaCallFrame callFrame;
 		public int level;  /* total number of captures (finished or unfinished) */
 
-		public Capture[] capture;
-
+		/** @exclude */
 		public static class Capture {
-
 			public StringPointer init;
 			public int len;
 		}
 
-		public Object[] getCaptures() {
-			if (level <= 0) {
+		public Object getCapture(int i) {
+			if (i >= level) {
 				return null;
 			}
-			Object[] caps = new String[level];
-			for (int i = 0; i < level; i++) {
-				if (capture[i].len == CAP_POSITION) {
-					caps[i] = new Double(src_init.length() - capture[i].init.length() + 1);
-				} else {
-					caps[i] = capture[i].init.getString().substring(0, capture[i].len);
-				}
+			if (capture[i].len == CAP_POSITION) {
+				return new Double(src_init.length() - capture[i].init.length() + 1);
+			} else {
+				return capture[i].init.getStringSubString(capture[i].len);
 			}
-			return caps;
 		}
 	}
 
+	/** @exclude */
 	public static class StringPointer {
-
-		private String string;
+		private final String string;
 		private int index = 0;
 
 		public StringPointer(String original) {
@@ -844,32 +862,34 @@ public final class StringLib implements JavaFunction {
 		}
 
 		public StringPointer getClone() {
-			StringPointer newSP = new StringPointer( this.getOriginalString(), this.getIndex() );
-			return newSP;
+			return new StringPointer(string, index);
 		}
 
 		public int getIndex () {
 			return index;
 		}
 
-		public void setIndex ( int ind ) {
+		public void setIndex (int ind) {
 			index = ind;
 		}
 
-		public String getOriginalString () {
-			return string;
-		}
-
-		public void setOriginalString(String orStr) {
-			string = orStr;
-		}
-
 		public String getString() {
-			return getString(0);
+			if (index == 0) {
+				return string;
+			}
+			return string.substring(index);
 		}
 
-		public String getString(int i) {
-			return string.substring ( index + i, string.length () );
+		public int getStringLength() {
+			return getStringLength(0);
+		}
+
+		public int getStringLength(int i) {
+			return string.length() - (index + i);
+		}
+
+		public String getStringSubString(int len) {
+			return string.substring(index, index + len);
 		}
 
 		public char getChar() {
@@ -877,41 +897,43 @@ public final class StringLib implements JavaFunction {
 		}
 
 		public char getChar(int strIndex) {
-			if ( index + strIndex >= string.length () )
+			int i = index + strIndex;
+			if (i >= string.length()) {
 				return '\0';
-			else
-				return string.charAt ( index + strIndex );
+			} else {
+				return string.charAt(i);
+			}
 		}
 
 		public int length() {
 			return string.length () - index;
 		}
 
-		public int postIncrStringI ( int num ) {
+		public int postIncrStringI(int num) {
 			int oldIndex = index;
 			index += num;
 			return oldIndex;
 		}
 
-		public int preIncrStringI ( int num ) {
+		public int preIncrStringI(int num) {
 			index += num;
 			return index;
 		}
 
-		public char postIncrString ( int num ) {
+		public char postIncrString (int num) {
 			char c = getChar();
 			index += num;
 			return c;
 		}
 
-		public char preIncrString ( int num ) {
-			index += num;
-			return getChar();
-		}
-
 		public int compareTo(StringPointer cmp, int len) {
-			return this.string.substring(this.index,this.index+len).compareTo(
-					cmp.string.substring(cmp.index, cmp.index+len));
+			for (int i = 0; i < len; i++) {
+				int val = getChar(i) - cmp.getChar(i);
+				if (val != 0) {
+					return val;
+				}
+			}
+			return 0;
 		}
 	}
 
@@ -943,7 +965,7 @@ public final class StringLib implements JavaFunction {
 
 	private static int push_captures ( MatchState ms, StringPointer s, StringPointer e ) {
 		int nlevels = ( ms.level == 0 && s != null ) ? 1 : ms.level;
-		BaseLib.luaAssert(nlevels <= LUA_MAXCAPTURES, "too many captures");
+		KahluaUtil.luaAssert(nlevels <= LUA_MAXCAPTURES, "too many captures");
 		for (int i = 0; i < nlevels; i++) {
 			push_onecapture (ms, i, s, e);
 		}
@@ -962,10 +984,10 @@ public final class StringLib implements JavaFunction {
 
 	private static int findAux (LuaCallFrame callFrame, boolean find ) {
 		String f = find ? names[FIND] : names[MATCH];
-		String source = (String) BaseLib.getArg(callFrame, 1, BaseLib.TYPE_STRING, f);
-		String pattern = (String) BaseLib.getArg(callFrame, 2, BaseLib.TYPE_STRING, f);
-		Double i = ((Double)(BaseLib.getOptArg(callFrame, 3, BaseLib.TYPE_NUMBER)));
-		boolean plain = LuaState.boolEval(BaseLib.getOptArg(callFrame, 4, BaseLib.TYPE_BOOLEAN));
+		String source = KahluaUtil.getStringArg(callFrame, 1, f);
+		String pattern = KahluaUtil.getStringArg(callFrame, 2, f);
+		Double i = KahluaUtil.getOptionalNumberArg(callFrame, 3);
+		boolean plain = KahluaUtil.boolEval(KahluaUtil.getOptionalArg(callFrame, 4));
 		int init = (i == null ? 0 : i.intValue() - 1);
 
 		if ( init < 0 ) {
@@ -982,29 +1004,27 @@ public final class StringLib implements JavaFunction {
 			// do a plain search
 			int pos = source.indexOf(pattern, init);
 			if ( pos > -1 ) {
-				return callFrame.push(LuaState.toDouble(pos + 1), LuaState.toDouble(pos + pattern.length()));
+				return callFrame.push(KahluaUtil.toDouble(pos + 1), KahluaUtil.toDouble(pos + pattern.length()));
 			}
 		} else {
 			StringPointer s = new StringPointer(source);
 			StringPointer p = new StringPointer(pattern);
 
-			MatchState ms = new MatchState ();
 			boolean anchor = false;
-			if ( p.getChar () == '^' ) {
+			if (p.getChar() == '^') {
 				anchor = true;
-				p.postIncrString ( 1 );
+				p.postIncrString(1);
 			}
 			StringPointer s1 = s.getClone();
-			s1.postIncrString ( init );
+			s1.postIncrString(init);
 
-			ms.callFrame = callFrame;
-			ms.src_init = s.getClone();
-			ms.endIndex = s.getString().length();
+			MatchState ms = new MatchState(callFrame, s.getClone(), s.getStringLength());
+
 			do {
 				StringPointer res;
 				ms.level = 0;
-				if ( ( res = match ( ms, s1, p ) ) != null ) {
-					if ( find ) {
+				if ((res = match(ms, s1, p)) != null) {
+					if (find) {
 						return callFrame.push(new Double(s.length () - s1.length () + 1), new Double(s.length () - res.length ())) +
 						push_captures ( ms, null, null );
 					} else {
@@ -1020,7 +1040,7 @@ public final class StringLib implements JavaFunction {
 	private static StringPointer startCapture ( MatchState ms, StringPointer s, StringPointer p, int what ) {
 		StringPointer res;
 		int level = ms.level;
-		BaseLib.luaAssert(level < LUA_MAXCAPTURES, "too many captures");
+		KahluaUtil.luaAssert(level < LUA_MAXCAPTURES, "too many captures");
 
 		ms.capture[level].init = s.getClone();
 		ms.capture[level].init.setIndex ( s.getIndex () );
@@ -1054,7 +1074,7 @@ public final class StringLib implements JavaFunction {
 
 	private static int checkCapture ( MatchState ms, int l ) {
 		l -= '1'; // convert chars 1-9 to actual ints 1-9
-		BaseLib.luaAssert(l < 0 || l >= ms.level || ms.capture[l].len == CAP_UNFINISHED,
+		KahluaUtil.luaAssert(l < 0 || l >= ms.level || ms.capture[l].len == CAP_UNFINISHED,
 		"invalid capture index");
 		return l;
 	}
@@ -1075,7 +1095,7 @@ public final class StringLib implements JavaFunction {
 
 	private static StringPointer matchBalance ( MatchState ms, StringPointer ss, StringPointer p ) {
 
-		BaseLib.luaAssert(!(p.getChar () == 0 || p.getChar ( 1 ) == 0), "unbalanced pattern");
+		KahluaUtil.luaAssert(!(p.getChar () == 0 || p.getChar ( 1 ) == 0), "unbalanced pattern");
 
 		StringPointer s = ss.getClone();
 		if ( s.getChar () != p.getChar () ) {
@@ -1100,11 +1120,11 @@ public final class StringLib implements JavaFunction {
 		return null;  /* string ends out of balance */
 	}
 
-	private static StringPointer classEnd ( MatchState ms, StringPointer pp ) {
+	private static StringPointer classEnd(StringPointer pp) {
 		StringPointer p = pp.getClone();
 		switch ( p.postIncrString ( 1 ) ) {
 		case L_ESC: {
-			BaseLib.luaAssert(p.getChar () != '\0', "malformed pattern (ends with '%')");
+			KahluaUtil.luaAssert(p.getChar () != '\0', "malformed pattern (ends with '%')");
 			p.postIncrString ( 1 );
 			return p;
 		}
@@ -1113,7 +1133,7 @@ public final class StringLib implements JavaFunction {
 				p.postIncrString ( 1 );
 			}
 			do { // look for a `]' 
-				BaseLib.luaAssert(p.getChar () != '\0', "malformed pattern (missing ']')");
+				KahluaUtil.luaAssert(p.getChar () != '\0', "malformed pattern (missing ']')");
 
 				if ( p.postIncrString ( 1 ) == L_ESC && p.getChar () != '\0' ) {
 					p.postIncrString ( 1 );  // skip escapes (e.g. `%]')
@@ -1248,9 +1268,9 @@ public final class StringLib implements JavaFunction {
 				}
 				case 'f': { // frontier?
 					p.postIncrString (2);
-					BaseLib.luaAssert(p.getChar() == '[' , "missing '[' after '%%f' in pattern");
+					KahluaUtil.luaAssert(p.getChar() == '[' , "missing '[' after '%%f' in pattern");
 
-					StringPointer ep = classEnd(ms, p);  // points to what is next
+					StringPointer ep = classEnd(p);  // points to what is next
 					char previous = (s.getIndex() == ms.src_init.getIndex()) ? '\0' : s.getChar(-1);
 
 					StringPointer ep1 = ep.getClone();
@@ -1291,8 +1311,7 @@ public final class StringLib implements JavaFunction {
 			}
 
 			if (isDefault) { // it is a pattern item
-				isDefault = false;
-				StringPointer ep = classEnd(ms, p);  // points to what is next
+				StringPointer ep = classEnd(p);  // points to what is next
 				boolean m = (s.getIndex () < ms.endIndex && singleMatch(s.getChar(), p, ep));
 				switch (ep.getChar()) {
 				case '?':  { // optional
@@ -1376,16 +1395,16 @@ public final class StringLib implements JavaFunction {
 	}
 
 	private static int gsub(LuaCallFrame cf, int nargs) {
-		String srcTemp = (String)BaseLib.getArg(cf, 1, BaseLib.TYPE_STRING, names[GSUB]);
-		String pTemp = (String)BaseLib.getArg(cf, 2, BaseLib.TYPE_STRING, names[GSUB]);
-		Object repl = BaseLib.getArg(cf, 3, null, names[GSUB]);
+		String srcTemp = KahluaUtil.getStringArg(cf, 1, names[GSUB]);
+		String pTemp = KahluaUtil.getStringArg(cf, 2, names[GSUB]);
+		Object repl = KahluaUtil.getArg(cf, 3, names[GSUB]);
 		{
-			String tmp = BaseLib.rawTostring(repl);
+			String tmp = KahluaUtil.rawTostring(repl);
 			if (tmp != null) {
 				repl = tmp;
 			}
 		}			
-		Double num = (Double)BaseLib.getOptArg(cf, 4, BaseLib.TYPE_NUMBER);
+		Double num = KahluaUtil.getOptionalNumberArg(cf, 4);
 		// if i isn't supplied, we want to substitute all occurrences of the pattern
 		int maxSubstitutions = (num == null) ? Integer.MAX_VALUE : num.intValue(); 
 
@@ -1398,24 +1417,21 @@ public final class StringLib implements JavaFunction {
 			pattern.postIncrString ( 1 );
 		}
 
-		String replType = BaseLib.type(repl);
-		if (!(replType == BaseLib.TYPE_FUNCTION ||
-						replType == BaseLib.TYPE_STRING || 
-						replType == BaseLib.TYPE_TABLE)) {
-			BaseLib.fail(("string/function/table expected, got "+replType));
+		if (!(repl instanceof Double ||
+						repl instanceof String ||
+						repl instanceof LuaClosure ||
+						repl instanceof JavaFunction ||
+						repl instanceof KahluaTable )) {
+			KahluaUtil.fail(("string/function/table expected, got " + repl));
 		}
 
-		MatchState ms = new MatchState ();
-		ms.callFrame = cf;
-		ms.src_init = src.getClone();
-		ms.endIndex = src.length();
+		MatchState ms = new MatchState(cf, src.getClone(), src.length());
 
 		int n = 0;
 		StringBuffer b = new StringBuffer();
-		StringPointer e = null;
 		while (n < maxSubstitutions) {
 			ms.level = 0;
-			e = match(ms, src, pattern);
+			StringPointer e = match(ms, src, pattern);
 			if (e != null) {
 				n++;
 				addValue(ms, repl, b, src, e);
@@ -1437,63 +1453,51 @@ public final class StringLib implements JavaFunction {
 	}
 
 	private static void addValue(MatchState ms, Object repl, StringBuffer b, StringPointer src, StringPointer e) {
-		String type = BaseLib.type(repl);
-		if (type == BaseLib.TYPE_NUMBER || type == BaseLib.TYPE_STRING) {
-			b.append(addString (ms, repl, src, e));
+		String replString = KahluaUtil.rawTostring(repl);
+		if (replString != null) {
+			b.append(addString(ms, replString, src, e));
 		} else {
-			String match = src.getString().substring(0, e.getIndex() - src.getIndex());
-			Object[] captures = ms.getCaptures();
+			Object captures = ms.getCapture(0);
+			String match;
 			if (captures != null) {
-				match = BaseLib.rawTostring(captures[0]);
+				match = KahluaUtil.rawTostring(captures);
+			} else {
+				match = src.getStringSubString(e.getIndex() - src.getIndex());
 			}
 			Object res = null;
-			if (type == BaseLib.TYPE_FUNCTION) {
-				res = ms.callFrame.thread.state.call(repl, match, null, null);
-			} else if (type == BaseLib.TYPE_TABLE) {
-				res = ((LuaTable)repl).rawget(match);
+			if (repl instanceof KahluaTable) {
+				res = ((KahluaTable)repl).rawget(match);
+			} else {
+				res = ms.callFrame.getThread().call(repl, match, null, null);
 			}
 			if (res == null) {
 				res = match;
 			}
-			b.append(BaseLib.rawTostring(res));
+			b.append(KahluaUtil.rawTostring(res));
 		}
 	}
 
-	private static String addString(MatchState ms, Object repl, StringPointer s, StringPointer e) {
-		String replTemp = BaseLib.tostring(repl, ms.callFrame.thread.state);
-		StringPointer replStr = new StringPointer (replTemp);
+	private static String addString(MatchState ms, String repl, StringPointer s, StringPointer e) {
+		StringPointer replStr = new StringPointer(repl);
 		StringBuffer buf = new StringBuffer();
-		for (int i = 0; i < replTemp.length(); i++) {
-			if (replStr.getChar ( i ) != L_ESC) {
-				buf.append(replStr.getChar(i));
+		for (int i = 0; i < repl.length(); i++) {
+			char c = replStr.getChar(i);
+			if (c != L_ESC) {
+				buf.append(c);
 			} else {
-				i ++;  // skip ESC
-				if (!Character.isDigit(replStr.getChar(i))) {
-					buf.append(replStr.getChar(i));
-				} else if (replStr.getChar(i) == '0') {
-					String str = s.getString ();
-					int len = s.length() - e.length();
-					if (len > str.length() ) {
-						len = str.length();
-					}
-					buf.append(str.substring(0, len));
+				i++;  // skip ESC
+				c = replStr.getChar(i);
+				if (!Character.isDigit(c)) {
+					buf.append(c);
+				} else if (c == '0') {
+					int len = s.getStringLength() - e.length();
+					buf.append(s.getStringSubString(len));
 				} else {
-					int captureIndex = replStr.getChar(i) - '1';
-					Object[] captures = ms.getCaptures();
-					if (captures == null || captureIndex > ms.level) {
-						throw new RuntimeException("invalid capture index");
+					Object o = ms.getCapture(c - '1');
+					if (o == null) {
+						throw new KahluaException("invalid capture index");
 					}
-					Object o = captures[captureIndex];
-					if(o instanceof Double) {
-						Double doubleValue = ((Double)o);
-						if( doubleValue.doubleValue() - doubleValue.intValue() == 0 ) {
-							buf.append(String.valueOf(((Double)o).intValue())); 
-						} else {
-							buf.append(String.valueOf(((Double)o).doubleValue()));
-						}
-					} else {
-						buf.append(o);
-					}
+					buf.append(KahluaUtil.tostring(o, null));
 				}
 			}
 		}

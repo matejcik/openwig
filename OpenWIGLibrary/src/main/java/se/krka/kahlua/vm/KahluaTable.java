@@ -22,16 +22,21 @@
 
 package se.krka.kahlua.vm;
 
-public interface LuaTable {
-	void setMetatable(LuaTable metatable);
-	LuaTable getMetatable();
+public interface KahluaTable {
+	void setMetatable(KahluaTable metatable);
+	KahluaTable getMetatable();
 	
 	void rawset(Object key, Object value);
 	Object rawget(Object key);
 
 	void rawset(int key, Object value);
 	Object rawget(int key);
-	
-	Object next(Object key);
+
 	int len();
+
+    KahluaTableIterator iterator();
+
+	boolean isEmpty();
+
+	void wipe();
 }

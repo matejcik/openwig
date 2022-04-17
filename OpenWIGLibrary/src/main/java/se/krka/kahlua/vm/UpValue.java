@@ -22,28 +22,45 @@ THE SOFTWARE.
 package se.krka.kahlua.vm;
 
 
+/**
+ * @exclude
+ */
 public final class UpValue {
 	// For open upvalues
-	public LuaThread thread;
-	public int index;
+	private Coroutine coroutine;
+
+    private final int index;
 
 	// For closed upvalues
-	public Object value;
-	
-	
-	public final Object getValue() {
-		if (thread == null) {
+	private Object value;
+
+    public UpValue(Coroutine coroutine, int index) {
+        this.coroutine = coroutine;
+        this.index = index;
+    }
+
+    public int getIndex() {
+        return index;
+    }
+
+    public final Object getValue() {
+		if (coroutine == null) {
 			return value;
 		}
-		return thread.objectStack[index];
+		return coroutine.objectStack[index];
 	}
 
 
 	public final void setValue(Object object) {
-		if (thread == null) {
+		if (coroutine == null) {
 			value = object;
 			return;
 		}
-		thread.objectStack[index] = object;
+		coroutine.objectStack[index] = object;
 	}
+
+    public void close() {
+        value = coroutine.objectStack[index];
+        coroutine = null;
+    }
 }

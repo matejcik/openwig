@@ -26,11 +26,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.TimeZone;
 
-import se.krka.kahlua.vm.JavaFunction;
-import se.krka.kahlua.vm.LuaCallFrame;
-import se.krka.kahlua.vm.LuaState;
-import se.krka.kahlua.vm.LuaTable;
-import se.krka.kahlua.vm.LuaTableImpl;
+import se.krka.kahlua.vm.*;
 
 public class OsLib implements JavaFunction {
 	private static final int DATE = 0;
@@ -39,8 +35,8 @@ public class OsLib implements JavaFunction {
 
 	private static final int NUM_FUNCS = 3;
 	
-	private static String[] funcnames;
-	private static OsLib[] funcs;
+	private static final String[] funcnames;
+	private static final OsLib[] funcs;
 
 	static {
 		funcnames = new String[NUM_FUNCS];
@@ -54,13 +50,12 @@ public class OsLib implements JavaFunction {
 		}
 	}
 
-	public static void register(LuaState state) {
-		LuaTable os = new LuaTableImpl();
-		state.getEnvironment().rawset("os", os);
-
+	public static void register(Platform platform, KahluaTable environment) {
+		KahluaTable os = platform.newTable();
 		for (int i = 0; i < NUM_FUNCS; i++) {
 			os.rawset(funcnames[i], funcs[i]);
 		}
+		environment.rawset("os", os);
 	}
 
 	private static final String TABLE_FORMAT = "*t";
@@ -78,7 +73,8 @@ public class OsLib implements JavaFunction {
 	//private static final String ISDST = "isdst";
 
 	private static TimeZone tzone = TimeZone.getDefault();
-	public static void setTimeZone (TimeZone tz) {
+
+	public static void setDefaultTimeZone (TimeZone tz) {
 		tzone = tz;
 	}
 	
@@ -105,42 +101,43 @@ public class OsLib implements JavaFunction {
 	private int time(LuaCallFrame cf, int nargs) {
 		if (nargs == 0) {
 			double t = (double) System.currentTimeMillis() * TIME_DIVIDEND_INVERTED;
-			cf.push(LuaState.toDouble(t));
+			cf.push(KahluaUtil.toDouble(t));
 		} else {
-			LuaTable table = (LuaTable) BaseLib.getArg(cf, 1, BaseLib.TYPE_TABLE, "time");
+			KahluaTable table = (KahluaTable) KahluaUtil.getArg(cf, 1, "time");
 			double t = (double) getDateFromTable(table).getTime() * TIME_DIVIDEND_INVERTED;
-			cf.push(LuaState.toDouble(t));
+			cf.push(KahluaUtil.toDouble(t));
 		}
 		return 1;
 	}
 
 	private int difftime(LuaCallFrame cf, int nargs) {
-		double t2 = BaseLib.rawTonumber(cf.get(0)).doubleValue();
-		double t1 = BaseLib.rawTonumber(cf.get(1)).doubleValue();
-		cf.push(LuaState.toDouble(t2-t1));
+		double t2 = KahluaUtil.getDoubleArg(cf, 1, "difftime");
+		double t1 = KahluaUtil.getDoubleArg(cf, 2, "difftime");
+		cf.push(KahluaUtil.toDouble(t2-t1));
 		return 1;
 	}
 
-	private int date(LuaCallFrame cf, int nargs) {
-		if (nargs == 0) {
-			return cf.push(getdate(DEFAULT_FORMAT));
+	private int date(LuaCallFrame cf, int nArguments) {
+        Platform platform = cf.getPlatform();
+		if (nArguments == 0) {
+			return cf.push(getdate(DEFAULT_FORMAT, platform));
 		} else {
-			String format = BaseLib.rawTostring(cf.get(0));
-			if (nargs == 1) {
-				return cf.push(getdate(format));
+			String format = KahluaUtil.getStringArg(cf, 1, "date");
+			if (nArguments == 1) {
+				return cf.push(getdate(format, platform));
 			} else {
-				Double rawTonumber = BaseLib.rawTonumber(cf.get(1));
-				long time = (long) (rawTonumber.doubleValue() * TIME_DIVIDEND);
-				return cf.push(getdate(format, time));
+				double t = KahluaUtil.getDoubleArg(cf, 2, "date");
+				long time = (long) (t * TIME_DIVIDEND);
+				return cf.push(getdate(format, time, platform));
 			}
 		}
 	}
 
-	public static Object getdate(String format) {
-		return getdate(format, Calendar.getInstance().getTime().getTime());
+	public static Object getdate(String format, Platform platform) {
+		return getdate(format, Calendar.getInstance().getTime().getTime(), platform);
 	}
 
-	public static Object getdate(String format, long time) {
+	public static Object getdate(String format, long time, Platform platform) {
 		//boolean universalTime = format.startsWith("!");
 		Calendar calendar = null;
 		int si = 0;
@@ -155,7 +152,7 @@ public class OsLib implements JavaFunction {
         if (calendar == null) { // invalid calendar?
             return null;
         } else if (format.substring(si, 2 + si).equals(TABLE_FORMAT)) {
-        	return getTableFromDate(calendar);
+        	return getTableFromDate(calendar, platform);
         } else {
         	return formatTime(format.substring(si), calendar);
         }
@@ -192,6 +189,14 @@ public class OsLib implements JavaFunction {
         return buffer.toString();
     }
 	
+	private static String format2Digits(int value){
+		String retval = Integer.toString(value);
+		if(value<10){
+			retval = "0"+retval;
+		}
+		return retval;
+	}
+	
 	private static String strftime(char format, Calendar cal) {
         switch(format) {
             case 'a': return shortDayNames[cal.get(Calendar.DAY_OF_WEEK)-1];
@@ -200,21 +205,21 @@ public class OsLib implements JavaFunction {
             case 'B': return longMonthNames[cal.get(Calendar.MONTH)];
             case 'c': return cal.getTime().toString();
             case 'C': return Integer.toString(cal.get(Calendar.YEAR) / 100);
-            case 'd': return Integer.toString(cal.get(Calendar.DAY_OF_MONTH));
+            case 'd': return format2Digits(cal.get(Calendar.DAY_OF_MONTH));
             case 'D': return formatTime("%m/%d/%y",cal);
             case 'e': return cal.get(Calendar.DAY_OF_MONTH) < 10 ? 
             				" " + strftime('d',cal) : strftime('d',cal);
             case 'h': return strftime('b',cal);
-            case 'H': return Integer.toString(cal.get(Calendar.HOUR_OF_DAY));
-            case 'I': return Integer.toString(cal.get(Calendar.HOUR));
+            case 'H': return format2Digits(cal.get(Calendar.HOUR_OF_DAY));
+            case 'I': return format2Digits(cal.get(Calendar.HOUR));
             case 'j': return Integer.toString(getDayOfYear(cal));
-            case 'm': return Integer.toString(cal.get(Calendar.MONTH) + 1);
-            case 'M': return Integer.toString(cal.get(Calendar.MINUTE));
+            case 'm': return format2Digits(cal.get(Calendar.MONTH) + 1);
+            case 'M': return format2Digits(cal.get(Calendar.MINUTE));
             case 'n': return "\n";
             case 'p': return cal.get(Calendar.AM_PM) == Calendar.AM ? "AM" : "PM";
             case 'r': return formatTime("%I:%M:%S %p",cal);
             case 'R': return formatTime("%H:%M",cal);
-            case 'S': return Integer.toString(cal.get(Calendar.SECOND));
+            case 'S': return format2Digits(cal.get(Calendar.SECOND));
             case 'U': return Integer.toString(getWeekOfYear(cal, true, false));
             case 'V': return Integer.toString(getWeekOfYear(cal, false, true));
             case 'w': return Integer.toString(cal.get(Calendar.DAY_OF_WEEK) - 1);
@@ -234,53 +239,53 @@ public class OsLib implements JavaFunction {
         return null; // bad input format.
 	}
 
-	public static LuaTable getTableFromDate(Calendar c) {
-		LuaTable time = new LuaTableImpl();
-		time.rawset(YEAR, LuaState.toDouble(c.get(Calendar.YEAR)));
-		time.rawset(MONTH, LuaState.toDouble(c.get(Calendar.MONTH)+1));
-		time.rawset(DAY, LuaState.toDouble(c.get(Calendar.DAY_OF_MONTH)));
-		time.rawset(HOUR, LuaState.toDouble(c.get(Calendar.HOUR_OF_DAY)));
-		time.rawset(MIN, LuaState.toDouble(c.get(Calendar.MINUTE)));
-		time.rawset(SEC, LuaState.toDouble(c.get(Calendar.SECOND)));
-		time.rawset(WDAY, LuaState.toDouble(c.get(Calendar.DAY_OF_WEEK)));
-		time.rawset(YDAY, LuaState.toDouble(getDayOfYear(c)));
-		time.rawset(MILLISECOND, LuaState.toDouble(c.get(Calendar.MILLISECOND)));
+	public static KahluaTable getTableFromDate(Calendar c, Platform platform) {
+		KahluaTable time = platform.newTable();
+		time.rawset(YEAR, KahluaUtil.toDouble(c.get(Calendar.YEAR)));
+		time.rawset(MONTH, KahluaUtil.toDouble(c.get(Calendar.MONTH)+1));
+		time.rawset(DAY, KahluaUtil.toDouble(c.get(Calendar.DAY_OF_MONTH)));
+		time.rawset(HOUR, KahluaUtil.toDouble(c.get(Calendar.HOUR_OF_DAY)));
+		time.rawset(MIN, KahluaUtil.toDouble(c.get(Calendar.MINUTE)));
+		time.rawset(SEC, KahluaUtil.toDouble(c.get(Calendar.SECOND)));
+		time.rawset(WDAY, KahluaUtil.toDouble(c.get(Calendar.DAY_OF_WEEK)));
+		time.rawset(YDAY, KahluaUtil.toDouble(getDayOfYear(c)));
+		time.rawset(MILLISECOND, KahluaUtil.toDouble(c.get(Calendar.MILLISECOND)));
 		//time.rawset(ISDST, null);
 		return time;
 	}
 	
 	/**
 	 * converts the relevant fields in the given luatable to a Date object.
-	 * @param time LuaTable with entries for year month and day, and optionally hour/min/sec
+	 * @param time KahluaTable with entries for year month and day, and optionally hour/min/sec
 	 * @return a date object representing the date frim the luatable.
 	 */
-	public static Date getDateFromTable(LuaTable time) {
+	public static Date getDateFromTable(KahluaTable time) {
 		Calendar c = Calendar.getInstance(tzone);
-		c.set(Calendar.YEAR,(int)LuaState.fromDouble(time.rawget(YEAR)));
-		c.set(Calendar.MONTH,(int)LuaState.fromDouble(time.rawget(MONTH))-1);
-		c.set(Calendar.DAY_OF_MONTH,(int)LuaState.fromDouble(time.rawget(DAY)));
+		c.set(Calendar.YEAR,(int) KahluaUtil.fromDouble(time.rawget(YEAR)));
+		c.set(Calendar.MONTH,(int) KahluaUtil.fromDouble(time.rawget(MONTH))-1);
+		c.set(Calendar.DAY_OF_MONTH,(int) KahluaUtil.fromDouble(time.rawget(DAY)));
 		Object hour = time.rawget(HOUR);
 		Object minute = time.rawget(MIN);
 		Object seconds = time.rawget(SEC);
 		Object milliseconds = time.rawget(MILLISECOND);
 		//Object isDst = time.rawget(ISDST);
 		if (hour != null) {
-			c.set(Calendar.HOUR_OF_DAY,(int)LuaState.fromDouble(hour));
+			c.set(Calendar.HOUR_OF_DAY,(int) KahluaUtil.fromDouble(hour));
 		} else {
 			c.set(Calendar.HOUR_OF_DAY, 0);
 		}
 		if (minute != null) {
-			c.set(Calendar.MINUTE,(int)LuaState.fromDouble(minute));
+			c.set(Calendar.MINUTE,(int) KahluaUtil.fromDouble(minute));
 		} else {
 			c.set(Calendar.MINUTE, 0);
 		}
 		if (seconds != null) {
-			c.set(Calendar.SECOND,(int)LuaState.fromDouble(seconds));
+			c.set(Calendar.SECOND,(int) KahluaUtil.fromDouble(seconds));
 		} else {
 			c.set(Calendar.SECOND, 0);
 		}
 		if (milliseconds != null) {
-			c.set(Calendar.MILLISECOND, (int)LuaState.fromDouble(milliseconds));
+			c.set(Calendar.MILLISECOND, (int) KahluaUtil.fromDouble(milliseconds));
 		} else {
 			c.set(Calendar.MILLISECOND, 0);
 		}

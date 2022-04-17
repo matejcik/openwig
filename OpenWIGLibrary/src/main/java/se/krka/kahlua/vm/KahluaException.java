@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2007-2009 Kristofer Karlsson <kristofer.karlsson@gmail.com>
+Copyright (c) 2008 Kristofer Karlsson <kristofer.karlsson@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -21,25 +21,22 @@ THE SOFTWARE.
 */
 package se.krka.kahlua.vm;
 
-
-
-public interface JavaFunction {
+public class KahluaException extends RuntimeException {
 	/**
-	 * This interface defines functions which the Kahlua engine can call.
 	 *
-	 * General contract:
-	 * <pre>
-	 *  callFrame.get(i) = an argument (0 <= i < nArguments)<br>
-	 * </pre>
-	 * Return (possibly) values to lua by calling:
-	 * <pre>
-	 *  callFrame.push(value1);
-	 *  callFrame.push(value2);
-	 *  return 2; // number of pushed values
-	 * </pre>
-	 * @param callFrame - the frame that contains all the arguments and where all the results should be put.
-	 * @param nArguments - number of function arguments 
-	 * @return N, number of return values. The top N objects on the stack are considered the return values.
 	 */
-	public abstract int call(LuaCallFrame callFrame, int nArguments);
+	private static final long serialVersionUID = 1L;
+
+	public Object errorMessage;
+
+	public KahluaException(Object errorMessage) {
+		this.errorMessage = errorMessage;
+	}
+
+	public String getMessage() {
+		if (errorMessage == null) {
+			return "nil";
+		}
+		return errorMessage.toString();
+	}
 }

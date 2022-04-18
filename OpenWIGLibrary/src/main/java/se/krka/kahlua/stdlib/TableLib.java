@@ -83,8 +83,6 @@ public final class TableLib implements JavaFunction {
 				return insert(callFrame, nArguments);
 			case REMOVE:
 				return remove(callFrame, nArguments);
-			case NEWARRAY:
-				return newarray(callFrame, nArguments);
             case PAIRS:
                 return pairs(callFrame, nArguments);
 			case ISEMPTY:
@@ -114,23 +112,6 @@ public final class TableLib implements JavaFunction {
         KahluaTable t = (KahluaTable) o;
         return callFrame.push(t.iterator());
     }
-
-    private int newarray(LuaCallFrame callFrame, int arguments) {
-		Object param = KahluaUtil.getOptionalArg(callFrame, 1);
-		KahluaArray ret = new KahluaArray();
-		if (param instanceof KahluaTable && arguments == 1) {
-			KahluaTable t = (KahluaTable) param;
-			int n = t.len();
-			for (int i = n; i >= 1; i--) {
-				ret.rawset(i, t.rawget(i));
-			}
-		} else {
-            for (int i = arguments; i >= 1; i--) {
-                ret.rawset(i, callFrame.get(i - 1));
-            }
-        }
-		return callFrame.push(ret);
-	}
 
 	private static int concat (LuaCallFrame callFrame, int nArguments) {
 		KahluaTable table = getTable(callFrame, nArguments);

@@ -26,10 +26,10 @@ package se.krka.kahlua;
  * @exclude
  */
 public class Version {
-	public static final String LUA_VERSION = "lua.version";
-	public static final String KAHLUA_MAJOR = "kahlua.major";
-	public static final String KAHLUA_MINOR = "kahlua.minor";
-	public static final String KAHLUA_FIX = "kahlua.fix";
+	public static final String LUA_VERSION = "5.1";
+	public static final String KAHLUA_MAJOR = "2";
+	public static final String KAHLUA_MINOR = "1";
+	public static final String KAHLUA_FIX = "1openwig";
 	public static final String VERSION = "Kahlua " + KAHLUA_MAJOR + "." + KAHLUA_MINOR + "." + KAHLUA_FIX + " for Lua " + LUA_VERSION;
 }
 

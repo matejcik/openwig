@@ -38,7 +38,7 @@ public class Savegame {
 		return Engine.VERSION.equals(ver);
 	}
 
-	public void store (LuaTable table)
+	public void store (KahluaTable table)
 	throws IOException {
 		DataOutputStream out = null;
 		if (saveFile.exists())
@@ -65,12 +65,12 @@ public class Savegame {
 
 	protected void resetObjectStore () {
 		objectStore = new Hashtable(256);
-		// XXX why did i choose to use LuaTable over Hashtable?
+		// XXX why did i choose to use KahluaTable over Hashtable?
 		currentId = 0;
 		level = 0;
 	}
 
-	public void restore (LuaTable table)
+	public void restore (KahluaTable table)
 	throws IOException {
 		DataInputStream dis = saveFile.openDataInputStream();
 		String sig = dis.readUTF();
@@ -104,20 +104,20 @@ public class Savegame {
 	private Hashtable javafuncToIdMap = new Hashtable(128);
 	private int currentJavafunc = 0;
 
-	public void buildJavafuncMap (LuaTable environment) {
-		LuaTable[] packages = new LuaTable[] {
+	public void buildJavafuncMap (KahluaTable environment) {
+		KahluaTable[] packages = new KahluaTable[] {
 			environment,
-			(LuaTable)environment.rawget("string"),
-			(LuaTable)environment.rawget("math"),
-			(LuaTable)environment.rawget("coroutine"),
-			(LuaTable)environment.rawget("os"),
-			(LuaTable)environment.rawget("table")
+			(KahluaTable)environment.rawget("string"),
+			(KahluaTable)environment.rawget("math"),
+			(KahluaTable)environment.rawget("coroutine"),
+			(KahluaTable)environment.rawget("os"),
+			(KahluaTable)environment.rawget("table")
 		};
 		for (int i = 0; i < packages.length; i++) {
-			LuaTable table = packages[i];
+			KahluaTable table = packages[i];
 			Object next = null;
 			while ((next = table.next(next)) != null) {
-				Object jf = table.rawget(next);
+				Object jf = delegate.get(next);
 				if (jf instanceof JavaFunction) addJavafunc((JavaFunction)jf);
 			}
 		}
@@ -173,10 +173,10 @@ public class Savegame {
 				out.writeUTF(obj.getClass().getName());
 				if (debug) debug(obj.getClass().getName() + " (" + obj.toString()+")");
 				((Serializable)obj).serialize(out);
-			} else if (obj instanceof LuaTable) {
+			} else if (obj instanceof KahluaTable) {
 				out.writeByte(LUA_TABLE);
 				if (debug) debug("table("+obj.toString()+"):\n");
-				serializeLuaTable((LuaTable)obj, out);
+				serializeLuaTable((KahluaTable)obj, out);
 			} else if (obj instanceof LuaClosure) {
 				out.writeByte(LUA_CLOSURE);
 				if (debug) debug("closure("+obj.toString()+")");
@@ -217,12 +217,12 @@ public class Savegame {
 		}
 	}
 
-	public void serializeLuaTable (LuaTable table, DataOutputStream out)
+	public void serializeLuaTable (KahluaTable table, DataOutputStream out)
 	throws IOException {
 		level++;
 		Object next = null;
 		while ((next = table.next(next)) != null) {
-			Object value = table.rawget(next);
+			Object value = delegate.get(next);
 			out.writeByte(LUATABLE_PAIR);
 			if (debug) for (int i = 0; i < level; i++) debug("  ");
 
@@ -274,11 +274,11 @@ public class Savegame {
 	throws IOException {
 		switch (type) {
 			case LUA_TABLE:
-				LuaTable lti;
-				if (target instanceof LuaTable)
-					lti = (LuaTable)target;
+				KahluaTable lti;
+				if (target instanceof KahluaTable)
+					lti = (KahluaTable)target;
 				else
-					lti = new LuaTableImpl();
+					lti = new KahluaTableImpl();
 				restCache(lti);
 				if (debug) debug("table:\n");
 				return deserializeLuaTable(in, lti);
@@ -326,7 +326,7 @@ public class Savegame {
 
 	int level = 0;
 
-	public LuaTable deserializeLuaTable (DataInputStream in, LuaTable table)
+	public KahluaTable deserializeLuaTable (DataInputStream in, KahluaTable table)
 	throws IOException {
 		level++;
 		while (true) {
@@ -335,9 +335,9 @@ public class Savegame {
 			if (debug) for (int i = 0; i < level; i++) debug("  ");
 			Object key = restoreValue(in, null);
 			if (debug) debug(" : ");
-			Object value = restoreValue(in, table.rawget(key));
+			Object value = restoreValue(in, delegate.get(key));
 			if (debug) debug("\n");
-			table.rawset(key, value);
+			delegate.put(key, value);
 		}
 		level--;
 		return table;

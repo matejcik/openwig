@@ -5,9 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import se.krka.kahlua.vm.*;
-import se.krka.kahlua.stdlib.MathLib;
 
-public class ZonePoint implements LuaTable, Serializable {
+public class ZonePoint implements KahluaTable, Serializable {
 	public double latitude = 0;
 	public double longitude = 0;
 	public double altitude = 0;
@@ -148,7 +147,7 @@ public class ZonePoint implements LuaTable, Serializable {
 	
 	public double bearing (double lat, double lon) {
 		// calculates bearing from specified point to here
-		return MathLib.atan2(lat2m(latitude - lat), lon2m(lat, longitude - lon));
+		return Math.atan2(lat2m(latitude - lat), lon2m(lat, longitude - lon));
 	}
 	
 	public double bearing (ZonePoint zp) {
@@ -169,27 +168,27 @@ public class ZonePoint implements LuaTable, Serializable {
 		return ret;
 	}
 
-	public void setMetatable (LuaTable metatable) { }
-	public LuaTable getMetatable () { return null; }
+	public void setMetatable (KahluaTable metatable) { }
+	public KahluaTable getMetatable () { return null; }
 
 	public void rawset (Object key, Object value) {
 		if (key == null) return;
 		String name = key.toString();
 		if ("latitude".equals(name))
-			latitude = LuaState.fromDouble(value);
+			latitude = KahluaUtil.fromDouble(value);
 		else if ("longitude".equals(name))
-			longitude = LuaState.fromDouble(value);
+			longitude = KahluaUtil.fromDouble(value);
 		else if ("altitude".equals(name)) {
-			altitude = LuaState.fromDouble(value);
+			altitude = KahluaUtil.fromDouble(value);
 		}
 	}
 
 	public Object rawget (Object key) {
 		if (key == null) return null;
 		String name = key.toString();
-		if ("latitude".equals(name)) return LuaState.toDouble(latitude);
-		if ("longitude".equals(name)) return LuaState.toDouble(longitude);
-		if ("altitude".equals(name)) return LuaState.toDouble(altitude);
+		if ("latitude".equals(name)) return KahluaUtil.toDouble(latitude);
+		if ("longitude".equals(name)) return KahluaUtil.toDouble(longitude);
+		if ("altitude".equals(name)) return KahluaUtil.toDouble(altitude);
 		return null;
 	}
 
@@ -198,12 +197,10 @@ public class ZonePoint implements LuaTable, Serializable {
 	}
 
 	public void rawset(int i, Object value) {
+		KahluaUtil.fail("Invalid key for ZonePoint");
 	}
 
-	public Object next (Object key) { return null; }
 	public int len () { return 3; }
-
-	public void updateWeakSettings (boolean weakKeys, boolean weakValues) { }
 
 	public void serialize (DataOutputStream out) throws IOException {
 		out.writeDouble(latitude);
@@ -219,5 +216,21 @@ public class ZonePoint implements LuaTable, Serializable {
 
 	public String toString () {
 		return "ZonePoint("+latitude+","+longitude+","+altitude+")" /* + "-" + super.toString()*/;
+	}
+
+	@Override
+	public KahluaTableIterator iterator() {
+		KahluaUtil.fail("Cannot iterate over ZonePoint");
+		return null;
+	}
+
+	@Override
+	public boolean isEmpty() {
+		return false;
+	}
+
+	@Override
+	public void wipe() {
+		KahluaUtil.fail("Cannot wipe a ZonePoint");
 	}
 }

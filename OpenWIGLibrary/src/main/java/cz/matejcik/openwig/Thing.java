@@ -5,6 +5,8 @@ import se.krka.kahlua.vm.*;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import se.krka.kahlua.j2se.KahluaTableImpl;
 import se.krka.kahlua.stdlib.BaseLib;
 
 public class Thing extends Container {
@@ -31,7 +33,7 @@ public class Thing extends Container {
 	
 	public Thing(boolean character) {
 		this.character = character;
-		table.rawset("Commands", new LuaTableImpl());
+		delegate.put("Commands", new KahluaTableImpl());
 	}
 	
 	protected void setItem (String key, Object value) {
@@ -43,13 +45,14 @@ public class Thing extends Container {
 			actions.clear();
 
 			// add new actions
-			LuaTable lt = (LuaTable)value;
-			Object i = null;
-			while ((i = lt.next(i)) != null) {
-				Action a = (Action)lt.rawget(i);
+			KahluaTable lt = (KahluaTable)value;
+			var it = lt.iterator();
+			while (it.advance()) {
+				Object k = it.getKey();
+				Action a = (Action)it.getValue();
 				//a.name = (String)i;
-				if (i instanceof Double) a.name = BaseLib.numberToString((Double)i);
-				else a.name = i.toString();
+				if (k instanceof Double) a.name = KahluaUtil.numberToString((Double)k);
+				else a.name = k.toString();
 				a.setActor(this);
 				actions.add(a);
 				a.associateWithTargets();

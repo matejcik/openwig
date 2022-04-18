@@ -3,7 +3,8 @@ package cz.matejcik.openwig;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import se.krka.kahlua.stdlib.TableLib;
+
+import se.krka.kahlua.j2se.KahluaTableImpl;
 import se.krka.kahlua.vm.*;
 
 public class Cartridge extends EventTable {
@@ -15,7 +16,7 @@ public class Cartridge extends EventTable {
 	
 	public List<Task> tasks = new ArrayList<>();
 	
-	public LuaTable allZObjects = new LuaTableImpl();
+	public KahluaList allZObjects = new KahluaList();
 	
 	private static JavaFunction requestSync = new JavaFunction() {
 		public int call (LuaCallFrame callFrame, int nArguments) {
@@ -31,9 +32,9 @@ public class Cartridge extends EventTable {
 	protected String luaTostring () { return "a ZCartridge instance"; }
 	
 	public Cartridge () {
-		table.rawset("RequestSync", requestSync);
-		table.rawset("AllZObjects", allZObjects);
-		TableLib.rawappend(allZObjects, this);
+		delegate.put("RequestSync", requestSync);
+		delegate.put("AllZObjects", allZObjects);
+		allZObjects.getDelegate().add(this);
 	}
 		
 	public void walk (ZonePoint zp) {	
@@ -67,12 +68,12 @@ public class Cartridge extends EventTable {
 		return count;
 	}
 	
-	public LuaTable currentThings () {
-		LuaTable ret = new LuaTableImpl();
+	public List<Thing> currentThings () {
+		List<Thing> things = new ArrayList<>();
 		for (Zone z : zones) {
-			z.collectThings(ret);
+			z.collectThings(things);
 		}
-		return ret;
+		return things;
 	}
 	
 	public int visibleUniversalActions () {
@@ -92,7 +93,7 @@ public class Cartridge extends EventTable {
 	}
 	
 	public void addObject (Object o) {
-		TableLib.rawappend(allZObjects, o);
+		allZObjects.getDelegate().add(o);
 		sortObject(o);
 	}
 
@@ -107,10 +108,9 @@ public class Cartridge extends EventTable {
 	throws IOException {
 		super.deserialize(in);
 		Engine.instance.cartridge = this;
-		allZObjects = (LuaTable)table.rawget("AllZObjects");
-		Object next = null;
-		while ((next = allZObjects.next(next)) != null) {
-			sortObject(allZObjects.rawget(next));
+		allZObjects = (KahluaList)delegate.get("AllZObjects");
+		for (var entry: allZObjects.getDelegate()) {
+			sortObject(entry);
 		}
 	}
 }

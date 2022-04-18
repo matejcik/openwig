@@ -1,15 +1,11 @@
 package cz.matejcik.openwig;
 
-import se.krka.kahlua.stdlib.BaseLib;
+import se.krka.kahlua.j2se.KahluaTableImpl;
 import se.krka.kahlua.vm.*;
 
 import java.io.*;
 
-public class EventTable implements LuaTable, Serializable {
-
-	public LuaTable table = new LuaTableImpl();
-
-	private LuaTable metatable = new LuaTableImpl();
+public class EventTable extends KahluaTableImpl implements Serializable {
 
 	private static class TostringJavaFunc implements JavaFunction {
 
@@ -32,7 +28,7 @@ public class EventTable implements LuaTable, Serializable {
 	}
 
 	public void serialize (DataOutputStream out) throws IOException {
-		Engine.instance.savegame.storeValue(table, out);
+		Engine.instance.savegame.storeValue(delegate, out);
 	}
 
 	public void deserialize (DataInputStream in) throws IOException {
@@ -58,7 +54,7 @@ public class EventTable implements LuaTable, Serializable {
 	
 	public void setPosition(ZonePoint location) {
 		position = location;
-		table.rawset("ObjectLocation", location);
+		delegate.put("ObjectLocation", location);
 	}
 
 	public boolean isLocated() {
@@ -67,11 +63,11 @@ public class EventTable implements LuaTable, Serializable {
 
 	protected void setItem(String key, Object value) {
 		if ("Name".equals(key)) {
-			name = BaseLib.rawTostring(value);
+			name = KahluaUtil.rawTostring(value);
 		} else if ("Description".equals(key)) {
-			description = Engine.removeHtml(BaseLib.rawTostring(value));
+			description = Engine.removeHtml(KahluaUtil.rawTostring(value));
 		} else if ("Visible".equals(key)) {
-			visible = LuaState.boolEval(value);
+			visible = KahluaUtil.boolEval(value);
 		} else if ("ObjectLocation".equals(key)) {
 			//setPosition(ZonePoint.copy((ZonePoint)value));
 			// i know there was need to copy. but why? it is messing up deserialization
@@ -80,36 +76,36 @@ public class EventTable implements LuaTable, Serializable {
 			media = (Media)value;
 		} else if ("Icon".equals(key)) {
 			icon = (Media)value;
+		} else {
+			super.rawset(key, value);
 		}
 	}
 
 	protected Object getItem (String key) {
 		if ("CurrentDistance".equals(key)) {
-			if (isLocated()) return LuaState.toDouble(position.distance(Engine.instance.player.position));
-			else return LuaState.toDouble(-1);
+			if (isLocated()) return KahluaUtil.toDouble(position.distance(Engine.instance.player.position));
+			else return KahluaUtil.toDouble(-1);
 		} else if ("CurrentBearing".equals(key)) {
 			if (isLocated())
-				return LuaState.toDouble(ZonePoint.angle2azimuth(position.bearing(Engine.instance.player.position)));
-			else return LuaState.toDouble(0);
-		} else return table.rawget(key);
+				return KahluaUtil.toDouble(ZonePoint.angle2azimuth(position.bearing(Engine.instance.player.position)));
+			else return KahluaUtil.toDouble(0);
+		} else return rawget(key);
 	}
-	
-	public void setTable (LuaTable table) {
-		Object n = null;
-		while ((n = table.next(n)) != null) {
-			Object val = table.rawget(n);
-			rawset(n, val);
-			//if (n instanceof String) setItem((String)n, val);
+
+	public void setTable (KahluaTable table) {
+		var it = table.iterator();
+		while (it.advance()) {
+			rawset(it.getKey(), it.getValue());
 		}
 	}
 	
 	public void callEvent(String name, Object param) {
 		try {
-			Object o = table.rawget(name);
+			Object o = rawget(name);
 			if (o instanceof LuaClosure) {
 				Engine.log("EVNT: " + toString() + "." + name + (param!=null ? " (" + param.toString() + ")" : ""), Engine.LOG_CALL);
 				LuaClosure event = (LuaClosure) o;
-				Engine.state.call(event, this, param, null);
+				Engine.workerThread.call(event, new Object[] {param});
 				Engine.log("EEND: " + toString() + "." + name, Engine.LOG_CALL);
 			}
 		} catch (Throwable t) {
@@ -118,7 +114,7 @@ public class EventTable implements LuaTable, Serializable {
 	}
 	
 	public boolean hasEvent(String name) {
-		return (table.rawget(name)) instanceof LuaClosure;
+		return (rawget(name)) instanceof LuaClosure;
 	}
 	
 	public String toString()  {
@@ -126,35 +122,23 @@ public class EventTable implements LuaTable, Serializable {
 	}
 
 	public void rawset(Object key, Object value) {
-		// TODO unify rawset/setItem
 		if (key instanceof String) {
 			setItem((String) key, value);
+		} else {
+			super.rawset(key, value);
 		}
-		table.rawset(key, value);
 		Engine.log("PROP: " + toString() + "." + key + " is set to " + (value == null ? "nil" : value.toString()), Engine.LOG_PROP);
 	}
 
-	public void setMetatable (LuaTable metatable) { }
-
-	public LuaTable getMetatable () { return metatable; }
+	public void setMetatable (KahluaTable metatable) {
+		KahluaUtil.fail("Don't.");
+	}
 
 	public Object rawget (Object key) {
 		// TODO unify rawget/getItem
 		if (key instanceof String)
 			return getItem((String)key);
 		else
-			return table.rawget(key);
+			return super.rawget(key);
 	}
-
-	public void rawset(int key, Object value) {
-		table.rawset(key, value);
-	}
-
-	public Object rawget(int key) {
-		return table.rawget(key);
-	}
-
-	public Object next (Object key) { return table.next(key); }
-
-	public int len () { return table.len(); }
 }

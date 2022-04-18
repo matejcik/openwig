@@ -2,12 +2,12 @@ package cz.matejcik.openwig;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import se.krka.kahlua.stdlib.TableLib;
+
 import se.krka.kahlua.vm.*;
 
 public class Container extends EventTable {
 
-	public LuaTable inventory = new LuaTableImpl();
+	public KahluaList inventory = new KahluaList();
 	public Container container = null;
 	
 	private static JavaFunction moveTo = new JavaFunction() {
@@ -23,7 +23,7 @@ public class Container extends EventTable {
 		public int call (LuaCallFrame callFrame, int nArguments) {
 			Container p = (Container) callFrame.get(0);
 			Thing t = (Thing) callFrame.get(1);
-			callFrame.push(LuaState.toBoolean(p.contains(t)));
+			callFrame.push(KahluaUtil.toBoolean(p.contains(t)));
 			return 1;
 		}
 	};
@@ -34,40 +34,32 @@ public class Container extends EventTable {
 	}
 	
 	public Container() {
-		table.rawset("MoveTo", moveTo);
-		table.rawset("Contains", contains);
-		table.rawset("Inventory", inventory);
-		table.rawset("Container", container); // fix issues 181, 191
+		delegate.put("MoveTo", moveTo);
+		delegate.put("Contains", contains);
+		delegate.put("Inventory", inventory);
+		delegate.put("Container", container); // fix issues 181, 191
 	}
 	
 	public void moveTo(Container c) {
 		String cn = c == null ? "(nowhere)" : c.name;
 		Engine.log("MOVE: "+name+" to "+cn, Engine.LOG_CALL);
-		if (container != null) TableLib.removeItem(container.inventory, this);
+		if (container != null) container.inventory.getDelegate().remove(this);
 		// location.things.removeElement(this);
 		if (c != null) {
-			TableLib.rawappend(c.inventory, this);
+			c.inventory.getDelegate().add(this);
 			if (c == Engine.instance.player) setPosition(null);
 			else if (position != null) setPosition(c.position);
 			else if (container == Engine.instance.player) setPosition(ZonePoint.copy(Engine.instance.player.position));
 			container = c;
 		} else {
 			container = null;
-			rawset("ObjectLocation", null);
+			delegate.put("ObjectLocation", null);
 		}
-		table.rawset("Container", container); // fix issues 181, 191
+		delegate.put("Container", container); // fix issues 181, 191
 	}
 
 	public boolean contains (Thing t) {
-		Object key = null;
-		while ((key = inventory.next(key)) != null) {
-			Object value = inventory.rawget(key);
-			if (value instanceof Thing) {
-				if (value == t) return true;
-				if (((Thing)value).contains(t)) return true;
-			}
-		}
-		return false;
+		return inventory.getDelegate().contains(t);
 	}
 	
 	public boolean visibleToPlayer () {
@@ -80,16 +72,17 @@ public class Container extends EventTable {
 		return false;
 	}
 	
-	public Object rawget (Object key) {
+	@Override
+	public Object getItem (String key) {
 		if ("Container".equals(key)) return container;
-		else return super.rawget(key);
+		else return super.getItem(key);
 	}
 
 	public void deserialize (DataInputStream in)
 	throws IOException {
 		super.deserialize(in);
-		inventory = (LuaTable)table.rawget("Inventory");
-		Object o = table.rawget("Container");
+		inventory = (KahluaList)delegate.get("Inventory");
+		Object o = delegate.get("Container");
 		if (o instanceof Container) container = (Container)o;
 		else container = null;
 	}

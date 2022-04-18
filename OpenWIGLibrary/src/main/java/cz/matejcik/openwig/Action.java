@@ -22,12 +22,8 @@ public class Action extends EventTable {
 		// for serialization
 	}
 	
-	public Action (LuaTable table) {
-		this.table = table; // XXX deep copy needed?
-		Object o = null;
-		while ((o = table.next(o)) != null) {
-			if (o instanceof String) setItem((String)o, table.rawget(o));
-		}
+	public Action (KahluaTable table) {
+		setTable(table);
 	}
 
 	public void associateWithTargets () {
@@ -62,7 +58,7 @@ public class Action extends EventTable {
 		if ("Text".equals(key)) {
 			text = (String)value;
 		} else if ("CmdWith".equals(key)) {
-			boolean np = LuaState.boolEval(value);
+			boolean np = KahluaUtil.boolEval(value);
 			if (np != parameter) {
 				if (np) {
 					parameter = true;
@@ -73,34 +69,34 @@ public class Action extends EventTable {
 				}
 			}
 		} else if ("Enabled".equals(key)) {
-			enabled = LuaState.boolEval(value);
+			enabled = KahluaUtil.boolEval(value);
 		} else if ("WorksWithAll".equals(key)) {
 			// XXX bug: when the command is dissociated and somebody updates this, it will re-associate
 			dissociateFromTargets();
-			universal = LuaState.boolEval(value);
+			universal = KahluaUtil.boolEval(value);
 			associateWithTargets();
 		} else if ("WorksWithList".equals(key)) {
 			dissociateFromTargets();
-			LuaTable lt = (LuaTable)value;
-			Object i = null;
-			while ((i = lt.next(i)) != null) {
-				targets.add((Thing)lt.rawget(i));
+			KahluaTable lt = (KahluaTable)value;
+			var iter = lt.iterator();
+			while (iter.advance()) {
+				targets.add((Thing)iter.getValue());
 			}
 			associateWithTargets();
 		} else if ("MakeReciprocal".equals(key)) {
 			dissociateFromTargets();
-			reciprocal = LuaState.boolEval(value);
+			reciprocal = KahluaUtil.boolEval(value);
 			associateWithTargets();
 		} else if ("EmptyTargetListText".equals(key)) {
 			notarget = value == null ? "(not available now)" : value.toString();
+		} else {
+			super.setItem(key, value);
 		}
 	}
 	
 	public int visibleTargets(Container where) {
 		int count = 0;
-		Object key = null;
-		while ((key = where.inventory.next(key)) != null) {
-			Object o = where.inventory.rawget(key);
+		for (var o: where.inventory.getDelegate()) {
 			if (!(o instanceof Thing)) continue;
 			Thing t = (Thing)o;
 			if (t.isVisible() && (targets.contains(t) || isUniversal())) count++;
@@ -108,7 +104,7 @@ public class Action extends EventTable {
 		return count;
 	}
 	
-	public int targetsInside(LuaTable v) {
+	/*public int targetsInside(KahluaTable v) {
 		int count = 0;
 		Object key = null;
 		while ((key = v.next(key)) != null) {
@@ -118,7 +114,7 @@ public class Action extends EventTable {
 			if (t.isVisible() && (targets.contains(t) || isUniversal())) count++;
 		}
 		return count;
-	}
+	}*/
 	
 	public boolean isTarget(Thing t) {
 		return targets.contains(t) || isUniversal();

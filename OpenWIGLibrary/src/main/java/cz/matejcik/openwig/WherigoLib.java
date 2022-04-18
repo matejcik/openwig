@@ -7,6 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
+import se.krka.kahlua.j2se.KahluaTableImpl;
 import se.krka.kahlua.stdlib.BaseLib;
 import se.krka.kahlua.vm.*;
 
@@ -81,7 +82,7 @@ public class WherigoLib implements JavaFunction {
 		env.put("CartFilename", "cartridge.gwc");
 		env.put("PathSep", "/"); // no. you may NOT do file i/o on this device.
 		env.put("Version", "2.11-compatible(r"+Engine.VERSION+")");
-		env.put("Downloaded", LuaState.toDouble(0));
+		env.put("Downloaded", KahluaUtil.toDouble(0));
 	}
 	
 	private int index;
@@ -128,44 +129,43 @@ public class WherigoLib implements JavaFunction {
 		this.klass = assignClass();
 	}
 
-	public static void register(LuaState state) {
-		
+	public static void register(Platform platform, KahluaTable environment) {
 		if (env.get(DEVICE_ID) == null) throw new RuntimeException("set your DeviceID! WherigoLib.env.put(WherigoLib.DEVICE_ID, \"some value\")");
 		
-		LuaTable environment = state.getEnvironment();
-
-		LuaTable wig = new LuaTableImpl();
+		KahluaTable wig = new KahluaTableImpl();
 		environment.rawset("Wherigo", wig);
 		for (int i = 0; i < NUM_FUNCTIONS; i++) {
 			Engine.instance.savegame.addJavafunc(functions[i]);
 			wig.rawset(names[i], functions[i]);
 		}
+
+		KahluaTable metatables = KahluaUtil.getClassMetatables(platform, environment);
 		
-		LuaTable distanceMetatable = new LuaTableImpl();
+		KahluaTable distanceMetatable = new KahluaTableImpl();
 		distanceMetatable.rawset("__index", distanceMetatable);
 		distanceMetatable.rawset("__call", functions[GETVALUE]);
 		distanceMetatable.rawset(names[GETVALUE], functions[GETVALUE]);
-		state.setClassMetatable(Double.class, distanceMetatable);
+		metatables.rawset(Double.class, distanceMetatable);
 		
-		state.setClassMetatable(WherigoLib.class, wig);	
+		metatables.rawset(WherigoLib.class, wig);
 		wig.rawset("__index", wig);
 		
 		wig.rawset("Player", Engine.instance.player);
 		wig.rawset("INVALID_ZONEPOINT", null);
 		
 		// screen constants
-		wig.rawset("MAINSCREEN", LuaState.toDouble(UI.MAINSCREEN));
-		wig.rawset("DETAILSCREEN", LuaState.toDouble(UI.DETAILSCREEN));
-		wig.rawset("ITEMSCREEN", LuaState.toDouble(UI.ITEMSCREEN));
-		wig.rawset("INVENTORYSCREEN", LuaState.toDouble(UI.INVENTORYSCREEN));
-		wig.rawset("LOCATIONSCREEN", LuaState.toDouble(UI.LOCATIONSCREEN));
-		wig.rawset("TASKSCREEN", LuaState.toDouble(UI.TASKSCREEN));
+		wig.rawset("MAINSCREEN", KahluaUtil.toDouble(UI.MAINSCREEN));
+		wig.rawset("DETAILSCREEN", KahluaUtil.toDouble(UI.DETAILSCREEN));
+		wig.rawset("ITEMSCREEN", KahluaUtil.toDouble(UI.ITEMSCREEN));
+		wig.rawset("INVENTORYSCREEN", KahluaUtil.toDouble(UI.INVENTORYSCREEN));
+		wig.rawset("LOCATIONSCREEN", KahluaUtil.toDouble(UI.LOCATIONSCREEN));
+		wig.rawset("TASKSCREEN", KahluaUtil.toDouble(UI.TASKSCREEN));
 		
-		LuaTable pack = (LuaTable)environment.rawget("package");
-		LuaTable loaded = (LuaTable)pack.rawget("loaded");
+		KahluaTable pack = (KahluaTable)environment.rawget("package");
+		KahluaTable loaded = (KahluaTable)pack.rawget("loaded");
 		loaded.rawset("Wherigo", wig);
 		
-		LuaTable envtable = new LuaTableImpl(); /* Wherigo's Env table */
+		KahluaTable envtable = new KahluaTableImpl(); /* Wherigo's Env table */
 		for (var entry : env.entrySet()) {
 			envtable.rawset(entry.getKey(), entry.getValue());
 		}
@@ -231,11 +231,11 @@ public class WherigoLib implements JavaFunction {
 	}
 	
 	private int made (LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 2, "insufficient arguments for object:made");
+		KahluaUtil.luaAssert(nArguments >= 2, "insufficient arguments for object:made");
 		try {
 			WherigoLib maker = (WherigoLib)callFrame.get(0);
 			Object makee = callFrame.get(1);
-			return callFrame.push(LuaState.toBoolean(maker.klass == makee.getClass()));
+			return callFrame.push(KahluaUtil.toBoolean(maker.klass == makee.getClass()));
 		} catch (ClassCastException e) { throw new RuntimeException("bad arguments to object:made"); }
 	}
 	
@@ -244,10 +244,10 @@ public class WherigoLib implements JavaFunction {
 		Cartridge c = null;
 		if (param instanceof Cartridge) {
 			c = (Cartridge)param;
-		} else if (param instanceof LuaTable) {
-			LuaTable lt = (LuaTable)param;
+		} else if (param instanceof KahluaTable) {
+			KahluaTable lt = (KahluaTable)param;
 			c = (Cartridge)lt.rawget("Cartridge");
-			what.setTable((LuaTable)param);
+			what.setTable((KahluaTable)param);
 			if (what instanceof Container) {
 				Container cont = (Container)what;
 				Container target = (Container)lt.rawget("Container");
@@ -264,11 +264,11 @@ public class WherigoLib implements JavaFunction {
 		if (nArguments == 0) {
 			callFrame.push(new ZonePoint());
 		} else {
-			BaseLib.luaAssert(nArguments >= 2, "insufficient arguments for ZonePoint");
-			double a = LuaState.fromDouble(callFrame.get(0));
-			double b = LuaState.fromDouble(callFrame.get(1));
+			KahluaUtil.luaAssert(nArguments >= 2, "insufficient arguments for ZonePoint");
+			double a = KahluaUtil.fromDouble(callFrame.get(0));
+			double b = KahluaUtil.fromDouble(callFrame.get(1));
 			double c = 0;
-			if (nArguments > 2) c = LuaState.fromDouble(callFrame.get(2));
+			if (nArguments > 2) c = KahluaUtil.fromDouble(callFrame.get(2));
 			callFrame.push(new ZonePoint(a,b,c));
 		}
 		return 1;
@@ -281,10 +281,10 @@ public class WherigoLib implements JavaFunction {
 	 * that as a double.
 	 */
 	private int distance (LuaCallFrame callFrame, int nArguments) {
-		double a = LuaState.fromDouble(callFrame.get(0));
+		double a = KahluaUtil.fromDouble(callFrame.get(0));
 		String b = (String)callFrame.get(1);
 		double dist = ZonePoint.convertDistanceFrom(a, b);
-		callFrame.push(LuaState.toDouble(dist));
+		callFrame.push(KahluaUtil.toDouble(dist));
 		return 1;
 	}
 	
@@ -295,26 +295,26 @@ public class WherigoLib implements JavaFunction {
 	 * and returns as double.
 	 */
 	private int distanceGetValue (LuaCallFrame callFrame, int nArguments) {
-		double a = LuaState.fromDouble(callFrame.get(0));
+		double a = KahluaUtil.fromDouble(callFrame.get(0));
 		String b = (String)callFrame.get(1);
 		double dist = ZonePoint.convertDistanceTo(a, b);
-		callFrame.push(LuaState.toDouble(dist));
+		callFrame.push(KahluaUtil.toDouble(dist));
 		return 1;
 	}
 	
 	private int messageBox (LuaCallFrame callFrame, int nArguments) {
-		LuaTable lt = (LuaTable)callFrame.get(0);
+		KahluaTable lt = (KahluaTable)callFrame.get(0);
 		Engine.message(lt);
 		return 0;
 	}
 	
 	private int dialog (LuaCallFrame callFrame, int nArguments) {
-		LuaTable lt = (LuaTable)callFrame.get(0);
+		KahluaTable lt = (KahluaTable)callFrame.get(0);
 		int n = lt.len();
 		String[] texts = new String[n];
 		Media[] media = new Media[n];
 		for (int i = 1; i <= n; i++) {
-			LuaTable item = (LuaTable)lt.rawget(i);
+			KahluaTable item = (KahluaTable)lt.rawget(i);
 			texts[i-1] = Engine.removeHtml((String)item.rawget("Text"));
 			media[i-1] = (Media)item.rawget("Media");
 		}
@@ -327,7 +327,7 @@ public class WherigoLib implements JavaFunction {
 		String aa = a == null ? null : a.toString();
 		String bb = b == null ? null : b.toString();
 		boolean result = (aa == bb || (aa != null && aa.equalsIgnoreCase(bb)));
-		callFrame.push(LuaState.toBoolean(result));
+		callFrame.push(KahluaUtil.toBoolean(result));
 		return 1;
 	}
 	
@@ -338,7 +338,7 @@ public class WherigoLib implements JavaFunction {
 	}
 	
 	private int showscreen (LuaCallFrame callFrame, int nArguments) {
-		int screen = (int)LuaState.fromDouble(callFrame.get(0));
+		int screen = (int)KahluaUtil.fromDouble(callFrame.get(0));
 		EventTable et = null;
 		if (nArguments > 1) {
 			Object o = callFrame.get(1);
@@ -350,22 +350,22 @@ public class WherigoLib implements JavaFunction {
 	}
 	
 	private int translatePoint (LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 3, "insufficient arguments for TranslatePoint");
+		KahluaUtil.luaAssert(nArguments >= 3, "insufficient arguments for TranslatePoint");
 		ZonePoint z = (ZonePoint)callFrame.get(0);
-		double dist = LuaState.fromDouble(callFrame.get(1));
-		double angle = LuaState.fromDouble(callFrame.get(2));
+		double dist = KahluaUtil.fromDouble(callFrame.get(1));
+		double angle = KahluaUtil.fromDouble(callFrame.get(2));
 		callFrame.push(z.translate(angle, dist));
 		return 1;
 	}
 	
 	private int vectorToPoint (LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 2, "insufficient arguments for VectorToPoint");
+		KahluaUtil.luaAssert(nArguments >= 2, "insufficient arguments for VectorToPoint");
 		ZonePoint a = (ZonePoint)callFrame.get(0);
 		ZonePoint b = (ZonePoint)callFrame.get(1);
 		double bearing = ZonePoint.angle2azimuth(b.bearing(a));
 		double distance = b.distance(a);
-		callFrame.push(LuaState.toDouble(distance));
-		callFrame.push(LuaState.toDouble(bearing));
+		callFrame.push(KahluaUtil.toDouble(distance));
+		callFrame.push(KahluaUtil.toDouble(bearing));
 		return 2;
 	}
 
@@ -376,7 +376,7 @@ public class WherigoLib implements JavaFunction {
 	}
 
 	private int showStatusText (LuaCallFrame callFrame, int nArguments) {
-		BaseLib.luaAssert(nArguments >= 1, "insufficient arguments for ShowStatusText");
+		KahluaUtil.luaAssert(nArguments >= 1, "insufficient arguments for ShowStatusText");
 		String text = (String)callFrame.get(0);
 		if (text != null && text.length() == 0) text = null;
 		Engine.ui.setStatusText(text);
@@ -387,8 +387,8 @@ public class WherigoLib implements JavaFunction {
 		if (nArguments < 1) return 0;
 		Object arg = callFrame.get(0);
 		String text;
-		if (arg instanceof LuaTable) {
-			LuaTable lt = (LuaTable)arg;
+		if (arg instanceof KahluaTable) {
+			KahluaTable lt = (KahluaTable)arg;
 			text = (String)lt.rawget("Text");
 		} else {
 			text = arg.toString();
@@ -399,7 +399,7 @@ public class WherigoLib implements JavaFunction {
 	}
 	
 	private int command(LuaCallFrame callFrame, int nArguments) {
-	  BaseLib.luaAssert(nArguments >= 1, "insufficient arguments for Command");
+	  KahluaUtil.luaAssert(nArguments >= 1, "insufficient arguments for Command");
 	  String cmd = (String) callFrame.get(0);
 	  if (cmd != null && cmd.length() == 0)
 	    cmd = null;

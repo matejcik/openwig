@@ -2,12 +2,12 @@ package cz.matejcik.openwig;
 
 import java.io.DataInputStream;
 import java.io.IOException;
-import se.krka.kahlua.stdlib.TableLib;
+
 import se.krka.kahlua.vm.*;
 
 public class Player extends Thing {
 
-	private LuaTableImpl insideOfZones = new LuaTableImpl();
+	private KahluaList insideOfZones = new KahluaList();
 	
 	private static JavaFunction refreshLocation = new JavaFunction() {
 		public int call (LuaCallFrame callFrame, int nArguments) {
@@ -22,8 +22,8 @@ public class Player extends Thing {
 	
 	public Player() {
 		super(true);
-		table.rawset("RefreshLocation", refreshLocation);
-		table.rawset("InsideOfZones", insideOfZones);
+		delegate.put("RefreshLocation", refreshLocation);
+		delegate.put("InsideOfZones", insideOfZones);
 		setPosition(new ZonePoint(360,360,0));
 	}
 
@@ -33,20 +33,15 @@ public class Player extends Thing {
 
 	public void enterZone (Zone z) {
 		container = z;
-		if (!TableLib.contains(insideOfZones, z)) {
-			TableLib.rawappend(insideOfZones, z);
+		if (!insideOfZones.getDelegate().contains(z)) {
+			insideOfZones.getDelegate().add(z);
 		}
-		// Player should not go to inventory
-		/*if (!TableLib.contains(z.inventory, this)) {
-			TableLib.rawappend(z.inventory, this);
-		}*/
 	}
 
 	public void leaveZone (Zone z) {
-		TableLib.removeItem(insideOfZones, z);
+		insideOfZones.getDelegate().remove(z);
 		if (insideOfZones.len() > 0)
 			container = (Container)insideOfZones.rawget(insideOfZones.len());
-		//TableLib.removeItem(z.inventory, this);
 	}
 
 	protected String luaTostring () { return "a Player instance"; }
@@ -60,10 +55,8 @@ public class Player extends Thing {
 	
 	public int visibleThings() {
 		int count = 0;
-		Object key = null;
-		while ((key = inventory.next(key)) != null) {
-			Object o = inventory.rawget(key);
-			if (o instanceof Thing && ((Thing)o).isVisible()) count++;
+		for (var value: inventory.getDelegate()) {
+			if (value instanceof Thing && ((Thing)value).isVisible()) count++;
 		}
 		return count;
 	}
@@ -72,13 +65,14 @@ public class Player extends Thing {
 		position.latitude = Engine.gps.getLatitude();
 		position.longitude = Engine.gps.getLongitude();
 		position.altitude = Engine.gps.getAltitude();
-		table.rawset("PositionAccuracy", LuaState.toDouble(Engine.gps.getPrecision()));
+		delegate.put("PositionAccuracy", KahluaUtil.toDouble(Engine.gps.getPrecision()));
 		Engine.instance.cartridge.walk(position);
 	}
 
-	public void rawset (Object key, Object value) {
+	@Override
+	public void setItem (String key, Object value) {
 		if ("ObjectLocation".equals(key)) return;
-		super.rawset(key, value);
+		super.setItem(key, value);
 	}
 
 	public Object rawget (Object key) {
